@@ -336,7 +336,7 @@ def exercise_11():
     sim_harmonic_verlet.plot_observables("Harmonic - Verlet")
 
     sim_harmonic_rk4 = Simulation(oscillator2)
-    sim_harmonic_rk4.run(harmonic_system, rk4, tmax=30)
+    sim_harmonic_rk4.run(harmonic_system, rk4, tmax=300)
     sim_harmonic_rk4.plot_observables("Harmonic - RK4")
 
     # Loop over time steps and initial conditions, and plot for each integrator
@@ -418,4 +418,4 @@ def exercise_14():
     plt.show()
 
 exercise_11()
-exercise_14()
+#exercise_14()
