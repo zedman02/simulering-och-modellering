@@ -128,41 +128,20 @@ class EulerCromerIntegrator(BaseIntegrator):
 
 class VerletIntegrator(BaseIntegrator):
     def timestep(self, simsystem, osc, obs):
-        # Calculate the current acceleration based on the force
+        # Compute acceleration
         accel = simsystem.force(osc) / osc.m
 
-        # Calculate the next position using the Verlet formula
-        next_theta = 2 * osc.theta - osc.prev_theta + accel * self.dt ** 2
+        # Update position using Verlet method
+        theta_new = osc.theta + osc.dtheta * self.dt + 0.5 * accel * self.dt ** 2
 
-        # Calculate velocity estimate based on position difference
-        osc.dtheta = (next_theta - osc.prev_theta) / (2 * self.dt)
-
-        # Update `prev_theta` for the next iteration
-        osc.prev_theta = osc.theta
-
-        # Update `theta` to the newly calculated `next_theta`
-        osc.theta = next_theta
-
-        # Update time
-        osc.t += self.dt
-
-"""
-class VerletIntegrator(BaseIntegrator):
-    def timestep(self, simsystem, osc, obs):
-        # Calculate the current acceleration
-        accel = simsystem.force(osc) / osc.m
-
-        # Calculate the next position based on current and previous positions
-        next_theta = osc.theta + osc.dtheta * self.dt + 0.5 * accel * self.dt**2
-
-        new_accel = simsystem.force(Oscillator(osc.m, osc.c, next_theta, osc.dtheta, osc.gamma))/osc.m
-
+        # Update velocity (approximate average velocity)
+        new_accel = simsystem.force(Oscillator(m=osc.m, c=osc.c, theta0=theta_new, dtheta0=osc.dtheta, gamma=osc.gamma)) / osc.m
         osc.dtheta += 0.5 * (accel + new_accel) * self.dt
-        osc.theta = next_theta
-
-        # Update time
+        osc.theta = theta_new
         osc.t += self.dt
-"""
+
+
+
 class RK4Integrator(BaseIntegrator):
     def timestep(self, simsystem, osc, obs):
         # Store initial values for reset purposes
@@ -310,9 +289,9 @@ def exercise_11():
     rk4 = RK4Integrator(_dt=0.01)
 
     # Run Euler-Cromer for Pendulum
-    sim_pendulum_euler = Simulation(oscillator1)
-    sim_pendulum_euler.run(pendulum_system, euler_cromer, tmax=30)
-    sim_pendulum_euler.plot_observables("Pendulum - Euler-Cromer")
+    #sim_pendulum_euler = Simulation(oscillator1)
+    #sim_pendulum_euler.run(pendulum_system, euler_cromer, tmax=1000)
+    #sim_pendulum_euler.plot_observables("Pendulum - Euler-Cromer")
 
     # Run Verlet for Pendulum with proper `prev_theta` initialization
     oscillator1.prev_theta = oscillator1.theta - oscillator1.dtheta * verlet.dt
@@ -321,23 +300,23 @@ def exercise_11():
     sim_pendulum_verlet.plot_observables("Pendulum - Verlet")
 
     # Run RK4 for Pendulum
-    sim_pendulum_rk4 = Simulation(oscillator1)
-    sim_pendulum_rk4.run(pendulum_system, rk4, tmax=30)
-    sim_pendulum_rk4.plot_observables("Pendulum - RK4")
+    #sim_pendulum_rk4 = Simulation(oscillator1)
+    #sim_pendulum_rk4.run(pendulum_system, rk4, tmax=30)
+    #sim_pendulum_rk4.plot_observables("Pendulum - RK4")
 
     # Similarly, run simulations for the harmonic oscillator
-    sim_harmonic_euler = Simulation(oscillator2)
-    sim_harmonic_euler.run(harmonic_system, euler_cromer, tmax=30)
-    sim_harmonic_euler.plot_observables("Harmonic - Euler-Cromer")
+    #sim_harmonic_euler = Simulation(oscillator2)
+    #sim_harmonic_euler.run(harmonic_system, euler_cromer, tmax=1000)
+    #sim_harmonic_euler.plot_observables("Harmonic - Euler-Cromer")
 
     oscillator2.prev_theta = oscillator2.theta - oscillator2.dtheta * verlet.dt
     sim_harmonic_verlet = Simulation(oscillator2)
     sim_harmonic_verlet.run(harmonic_system, verlet, tmax=30)
     sim_harmonic_verlet.plot_observables("Harmonic - Verlet")
 
-    sim_harmonic_rk4 = Simulation(oscillator2)
-    sim_harmonic_rk4.run(harmonic_system, rk4, tmax=300)
-    sim_harmonic_rk4.plot_observables("Harmonic - RK4")
+    #sim_harmonic_rk4 = Simulation(oscillator2)
+    #sim_harmonic_rk4.run(harmonic_system, rk4, tmax=30)
+    #sim_harmonic_rk4.plot_observables("Harmonic - RK4")
 
     # Loop over time steps and initial conditions, and plot for each integrator
     time_steps = [0.01, 0.05, 0.1, 0.2]
@@ -367,20 +346,63 @@ def exercise_11():
             sim_rk4.run(pendulum_system, rk4, tmax=30)
             title = f"Pendulum - RK4 (dt={dt}, theta0/pi={theta_init / np.pi})"
             sim_rk4.plot_observables(title)
-    # TODO
 
-    """
-    This directive instructs Python to run what comes after ' if __name__ ==
-    "__main__" : '
-    if the script pendulum_template.py is executed
-    (e.g. by running "python3 pendulum_template.py" in your favourite terminal).
-    Otherwise, if pendulum_template.py is imported as a library
-    (e.g. by calling "import pendulum_template as dp" in another Python script),
-    the following is ignored.
-    In this way you can choose whether to code the solution to the exericises here
-    in this script
-    or to have (a) separate script(s) that include pendulum_template.py as library.
-    """
+
+def measure_period(theta0, simsystem, integrator, t_max=20):
+    """ Simulate the pendulum and measure the period for a given initial angle theta0 """
+    osc = Oscillator(m=1, c=4, theta0=theta0, dtheta0=0)
+    simulation = Simulation(osc)
+
+    # Run the simulation
+    simulation.run(simsystem, integrator, tmax=t_max)
+
+    # Find the period by detecting when the pendulum returns to the initial angle
+    positions = np.array(simulation.obs.pos)
+    times = np.array(simulation.obs.time)
+
+    # Detect crossing points (where the pendulum reverses direction)
+    crossing_points = np.where(np.diff(np.sign(positions)))[0]
+
+    # Estimate period from the first complete oscillation
+    if len(crossing_points) > 1:
+        period = 2 * (times[crossing_points[1]] - times[crossing_points[0]])
+        return period
+    else:
+        return None  # Not enough data to measure a period
+
+
+def period_pendulum(theta_0):
+    base_period = 2 * np.pi * 1 / 2
+    correction = 1 + (1 / 16) * theta_0 ** 2 + (11 / 3072) * theta_0 ** 4 + (173 / 737280) * theta_0 ** 6
+    return base_period * correction
+
+
+def exercise_12():
+    simsystem = Pendulum()
+    integrator = VerletIntegrator(_dt=0.01)
+
+    # Initial angles to test
+    initial_angles = np.linspace(0.1, np.pi / 2, 10)  # from 0.1 to 90 degrees in radians
+    periods = []
+
+    for theta0 in initial_angles:
+        period = measure_period(theta0, simsystem, integrator)
+        if period:
+            periods.append(period)
+            print(f"Theta0: {theta0:.2f} rad, Period: {period:.2f} s")
+        else:
+            print(f"Theta0: {theta0:.2f} rad - No period found")
+
+    compare = period_pendulum(initial_angles)
+
+    # Plot Period vs Initial Angle
+    plt.plot(initial_angles, periods, 'o-')
+    plt.plot(initial_angles, compare, '-')
+    plt.xlabel(r'Initial Angle $\theta_0$ (radians)')
+    plt.ylabel('Period T (seconds)')
+    plt.title('Pendulum T vs Initial Position')
+    plt.legend(["from simulation", "perturbation series"])
+    plt.show()
 
 
 def exercise_14():
@@ -400,7 +422,7 @@ def exercise_14():
     damped_pendulum = Pendulum()
 
     # Choose an integrator, e.g., Euler-Cromer or RK4
-    integrator = EulerCromerIntegrator(_dt=0.01)
+    integrator = VerletIntegrator(_dt=0.01)
 
     # Set up the simulation
     sim = Simulation(damped_oscillator)
@@ -417,5 +439,150 @@ def exercise_14():
     plt.grid()
     plt.show()
 
-exercise_11()
+
+def critical_damping(self):
+    """Check if the amplitude goes negative and return True if it doesn't."""
+    for pos in self.obs.pos:
+        if pos < 0:
+            return False
+    return True
+
+
+def exercise_13(t_max=10, initial_gamma=0.1, gamma_step=0.1):
+    gamma = initial_gamma
+    simsystem = Harmonic()
+    integrator = VerletIntegrator(_dt=0.01)
+
+    while gamma < 10:
+        # Create oscillator with current gamma
+        osc = Oscillator(m=1, c=4, t0=0, theta0=1, dtheta0=0, gamma=gamma)
+        simulation = Simulation(osc)
+        simulation.run(simsystem, integrator, tmax=t_max)
+
+        # Check if simulation reaches negative values
+        if simulation.critical_damping():
+            print(f"Smallest critical gamma where amplitude never goes negative: {gamma}")
+            simulation.plot_relax(title=f"Critical Damping with Gamma={gamma}")
+            return gamma
+        else:
+            gamma += gamma_step
+
+    print("No suitable gamma found within the tested range.")
+    return None
+
+
+# Constants
+omega0 = 2.0  # Natural frequency
+
+
+# Define the Damped Harmonic Oscillator class
+class DampedHarmonicOscillator(BaseSystem):
+    def __init__(self, omega0, gamma):
+        self.omega0 = omega0
+        self.gamma = gamma
+
+    def force(self, osc):
+        # Returns the damping force + spring force
+        return -self.omega0 ** 2 * osc.theta - self.gamma * osc.dtheta
+
+
+# Update the Simulation class to handle damped oscillators
+class SimulationWithDamping(Simulation):
+    def plot_observables(self, title="simulation", ref_E=None):
+        plt.clf()
+        plt.title(title)
+        plt.plot(self.obs.time, self.obs.pos, 'b-', label="Position x(t)")
+        plt.plot(self.obs.time, self.obs.vel, 'r-', label="Velocity v(t)")
+        plt.plot(self.obs.time, self.obs.energy, 'g-', label="Energy E(t)")
+        if ref_E is not None:
+            plt.axhline(ref_E, linestyle='--', color='black', label="Reference Energy")
+        plt.xlabel('time')
+        plt.ylabel('observables')
+        plt.legend()
+        plt.show()
+
+
+def relaxation_time(t, x):
+    # Calculate initial amplitude and the target threshold amplitude
+    init_amplitude = abs(x[0])
+    target_amplitude = init_amplitude / np.e
+
+    # To store times when the amplitude reaches the threshold
+    times_at_threshold = []
+
+    # Loop through the position data to find crossings
+    for i in range(1, len(x)):
+        # Check if the amplitude crosses the target amplitude from either side
+        if (abs(x[i - 1]) > target_amplitude >= abs(x[i])) or (abs(x[i - 1]) < target_amplitude <= abs(x[i])):
+            # Linear interpolation to find the exact time of crossing
+            t_cross = t[i - 1] + (t[i] - t[i - 1]) * \
+                      (target_amplitude - abs(x[i - 1])) / (abs(x[i]) - abs(x[i - 1]))
+            times_at_threshold.append(t_cross)
+            print(times_at_threshold)
+    # Output results
+    print("Times at which amplitude crosses the 1/e threshold:", times_at_threshold)
+
+    # Return the last crossing time if available
+    if times_at_threshold:
+        return times_at_threshold[-1]
+    else:
+        print("Amplitude never reaches 1/e of the initial amplitude.")
+        return None
+
+# Run simulation and plot for a given damping coefficient gamma
+def run_damped_oscillator_simulation(gamma):
+    # Set up oscillator with initial conditions and damping
+    oscillator = Oscillator(m=1, c=omega0 ** 2, theta0=1.0, dtheta0=0, gamma=gamma)
+    system = DampedHarmonicOscillator(omega0=omega0, gamma=gamma)
+    integrator = VerletIntegrator(_dt=0.01)  # You can switch to Verlet or RK4
+
+    # Initialize and run simulation
+    simulation = SimulationWithDamping(oscillator)
+    simulation.run(system, integrator, tmax=20)  # Run for 20 seconds
+
+    # Plot the observables
+    title = f"Damped Harmonic Oscillator with γ = {gamma}"
+    simulation.plot_observables(title=title)
+
+    # Calculate and print relaxation time
+    tau = relaxation_time(simulation.obs.time, simulation.obs.pos)
+    if tau:
+        print(f"Relaxation time τ for γ = {gamma}: {tau:.2f} s")
+    else:
+        print(f"No relaxation time found for γ = {gamma}")
+
+
+# Function to find critical damping (gamma_c)
+def find_critical_damping():
+    gamma_values = np.linspace(0.1, 5.0, 50)  # Range of gamma values to test
+    for gamma in gamma_values:
+        oscillator = Oscillator(m=1, c=omega0 ** 2, theta0=1.0, dtheta0=0, gamma=gamma)
+        system = DampedHarmonicOscillator(omega0=omega0, gamma=gamma)
+        integrator = VerletIntegrator(_dt=0.01)
+
+        # Run the simulation briefly to check for oscillation
+        simulation = SimulationWithDamping(oscillator)
+        simulation.run(system, integrator, tmax=10)
+
+        # Check if the oscillator crosses x=0 by looking for sign changes
+        pos_array = np.array(simulation.obs.pos)
+        sign_changes = np.where(np.diff(np.sign(pos_array)))[0]
+
+        # If there are no sign changes, it indicates critical or overdamping
+        if len(sign_changes) == 0:
+            print(f"Critical damping γ_c estimated as: {gamma:.2f}")
+            return gamma  # Found the smallest gamma with no oscillation
+
+    print("Critical damping γ_c not found in the range tested.")
+
+
+# Run simulations for γ = 0.5 and γ = 3.0, then find critical damping
+run_damped_oscillator_simulation(0.5)
+run_damped_oscillator_simulation(3.0)
+find_critical_damping()
+
+
+#exercise_11()
+#exercise_12()
+#exercise_13()
 #exercise_14()
