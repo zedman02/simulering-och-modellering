@@ -270,14 +270,14 @@ def exercise_11():
     g = 9.8  # gravitational acceleration in m/s^2
     L = g / 4  # calculated from sqrt(g/L) = 2
 
-    # Initial conditions
+    # Initial conditions (used for both pendulum and harmonic oscillator)
     theta0 = 0.1 * np.pi  # initial angle for theta0/pi = 0.1
-    theta1 = 0.5 * np.pi  # initial angle for theta0/pi = 0.5
     dtheta0 = 0  # initial angular velocity
     gamma = 0  # no damping
 
+    # Create oscillator instances with theta0 = 0.1 * np.pi for all integrators
     oscillator1 = Oscillator(m=m, c=g / L, theta0=theta0, dtheta0=dtheta0, gamma=gamma)
-    oscillator2 = Oscillator(m=m, c=g / L, theta0=theta1, dtheta0=dtheta0, gamma=gamma)
+    oscillator2 = Oscillator(m=m, c=g / L, theta0=theta0, dtheta0=dtheta0, gamma=gamma)
 
     # Create instances for the systems
     pendulum_system = Pendulum()
@@ -289,9 +289,9 @@ def exercise_11():
     rk4 = RK4Integrator(_dt=0.01)
 
     # Run Euler-Cromer for Pendulum
-    #sim_pendulum_euler = Simulation(oscillator1)
-    #sim_pendulum_euler.run(pendulum_system, euler_cromer, tmax=1000)
-    #sim_pendulum_euler.plot_observables("Pendulum - Euler-Cromer")
+    sim_pendulum_euler = Simulation(oscillator1)
+    sim_pendulum_euler.run(pendulum_system, euler_cromer, tmax=30)
+    sim_pendulum_euler.plot_observables("Pendulum - Euler-Cromer")
 
     # Run Verlet for Pendulum with proper `prev_theta` initialization
     oscillator1.prev_theta = oscillator1.theta - oscillator1.dtheta * verlet.dt
@@ -300,52 +300,59 @@ def exercise_11():
     sim_pendulum_verlet.plot_observables("Pendulum - Verlet")
 
     # Run RK4 for Pendulum
-    #sim_pendulum_rk4 = Simulation(oscillator1)
-    #sim_pendulum_rk4.run(pendulum_system, rk4, tmax=30)
-    #sim_pendulum_rk4.plot_observables("Pendulum - RK4")
+    sim_pendulum_rk4 = Simulation(oscillator1)
+    sim_pendulum_rk4.run(pendulum_system, rk4, tmax=30)
+    sim_pendulum_rk4.plot_observables("Pendulum - RK4")
 
-    # Similarly, run simulations for the harmonic oscillator
-    #sim_harmonic_euler = Simulation(oscillator2)
-    #sim_harmonic_euler.run(harmonic_system, euler_cromer, tmax=1000)
-    #sim_harmonic_euler.plot_observables("Harmonic - Euler-Cromer")
+    # Run Euler-Cromer for Harmonic Oscillator
+    sim_harmonic_euler = Simulation(oscillator2)
+    sim_harmonic_euler.run(harmonic_system, euler_cromer, tmax=30)
+    sim_harmonic_euler.plot_observables("Harmonic - Euler-Cromer")
 
+    # Run Verlet for Harmonic Oscillator with proper `prev_theta` initialization
     oscillator2.prev_theta = oscillator2.theta - oscillator2.dtheta * verlet.dt
     sim_harmonic_verlet = Simulation(oscillator2)
     sim_harmonic_verlet.run(harmonic_system, verlet, tmax=30)
     sim_harmonic_verlet.plot_observables("Harmonic - Verlet")
 
-    #sim_harmonic_rk4 = Simulation(oscillator2)
-    #sim_harmonic_rk4.run(harmonic_system, rk4, tmax=30)
-    #sim_harmonic_rk4.plot_observables("Harmonic - RK4")
+    # Run RK4 for Harmonic Oscillator
+    sim_harmonic_rk4 = Simulation(oscillator2)
+    sim_harmonic_rk4.run(harmonic_system, rk4, tmax=30)
+    sim_harmonic_rk4.plot_observables("Harmonic - RK4")
 
-    # Loop over time steps and initial conditions, and plot for each integrator
+    # Loop over time steps and initial conditions for further testing with Pendulum
     time_steps = [0.01, 0.05, 0.1, 0.2]
-    initial_conditions = [(theta0, dtheta0), (theta1, dtheta0)]
+    initial_conditions = [(theta0, dtheta0), (theta0, dtheta0)]  # All with theta0 = 0.1 * pi
 
     for dt in time_steps:
         for theta_init, dtheta_init in initial_conditions:
-            oscillator = Oscillator(m=m, c=g / L, theta0=theta_init, dtheta0=dtheta_init, gamma=0)
+            oscillator = Oscillator(m=m, c=g / L, theta0=theta_init, dtheta0=dtheta_init, gamma=gamma)
 
-            # Euler-Cromer
+            # Euler-Cromer for Pendulum
             euler_cromer = EulerCromerIntegrator(_dt=dt)
             sim_euler = Simulation(oscillator)
             sim_euler.run(pendulum_system, euler_cromer, tmax=30)
             title = f"Pendulum - Euler-Cromer (dt={dt}, theta0/pi={theta_init / np.pi})"
             sim_euler.plot_observables(title)
+            sim_euler.clear_observables()
 
-            # Verlet
+            # Verlet for Pendulum
             verlet = VerletIntegrator(_dt=dt)
+            oscillator.prev_theta = oscillator.theta - oscillator.dtheta * dt  # Ensure proper initialization
             sim_verlet = Simulation(oscillator)
             sim_verlet.run(pendulum_system, verlet, tmax=30)
             title = f"Pendulum - Verlet (dt={dt}, theta0/pi={theta_init / np.pi})"
             sim_verlet.plot_observables(title)
+            sim_verlet.clear_observables()
 
-            # RK4
+            # RK4 for Pendulum
             rk4 = RK4Integrator(_dt=dt)
             sim_rk4 = Simulation(oscillator)
             sim_rk4.run(pendulum_system, rk4, tmax=30)
             title = f"Pendulum - RK4 (dt={dt}, theta0/pi={theta_init / np.pi})"
             sim_rk4.plot_observables(title)
+            sim_rk4.clear_observables()
+
 
 
 def measure_period(theta0, simsystem, integrator, t_max=20):
