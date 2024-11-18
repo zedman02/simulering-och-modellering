@@ -19,6 +19,7 @@ from matplotlib import animation
 import numpy.random as rng
 import numpy as np
 import matplotlib
+import matplotlib.animation as animation
 class Cars:
     """ Class for the state of a number of cars """
     def __init__(self, numCars=5, roadLength=50, v0=1):
@@ -138,17 +139,17 @@ class MyPropagator(BasePropagator):
         cars.t += 1
         return flow_rate
 
+    def draw_cars(cars, road_drawing):
+        """ Draw cars on a circular or linear road """
+        road_drawing.clear()  # Clear the previous frame
+        road_drawing.set_xlim(0, cars.roadLength)  # Set road limits
+        road_drawing.set_ylim(0, 1)  # Single road lane
+        road_drawing.scatter(cars.x, [0.5] * cars.numCars, c=cars.c, cmap='hsv', s=50)  # Plot cars as dots
+        road_drawing.set_title("Cars on the Road")
+        road_drawing.set_xlabel("Road Position")
+        road_drawing.set_yticks([])  # Hide y-axis
+        road_drawing.grid(True)
 
-
-    def draw_cars(cars, cars_drawing):
-        """ Used later on to generate the animation """
-        theta = []
-        r = []
-        for position in cars.x:
-            # Convert to radians for plotting only (do not use radians for the simulation!)
-            theta.append(position * 2 * math.pi / cars.roadLength)
-            r.append(1)
-        return cars_drawing.scatter(theta, r, c=cars.c, cmap='hsv')
     def animate(framenr, cars, obs, propagator, road_drawing, stepsperframe):
         """ Animation function which integrates a few steps and return a drawing """
         for it in range(stepsperframe):
@@ -262,7 +263,29 @@ def road_vs_time_plot(vmax=2, p=0.5, numCars=30, roadLength=100, numsteps=200):
     plt.show()
 
 
+
+
+
+def animate_cars(vmax=2, p=0.5, numCars=30, roadLength=100, numsteps=200, interval=100):
+    cars = Cars(numCars=numCars, roadLength=roadLength)
+    propagator = MyPropagator(vmax, p)
+
+    # Set up the figure and axis
+    fig, ax = plt.subplots(figsize=(10, 2))
+
+    def update(frame):
+        """ Update function for animation """
+        propagator.timestep(cars, Observables())  # Update cars' positions
+        MyPropagator.draw_cars(cars, ax)  # Draw cars on the road
+
+    ani = animation.FuncAnimation(
+        fig, update, frames=numsteps, interval=interval, repeat=False
+    )
+    plt.show()
+
 # Run the simulation and plot
 road_vs_time_plot(vmax=2, p=0.5, numCars=30, roadLength=100, numsteps=200)
+animate_cars(vmax=2, p=0.5, numCars=30, roadLength=100, numsteps=200, interval=100)
+
 #main()
 
