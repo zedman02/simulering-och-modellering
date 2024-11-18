@@ -111,9 +111,34 @@ class MyPropagator(BasePropagator) :
         self.p = p
 
     def timestep(self, cars, obs):
-        # TODO Here you should implement the car behaviour rules
-    ###################################################################################
-    #########
+
+        # Step 1: Acceleration
+        for i in range(cars.numCars):
+            if cars.v[i] < self.vmax:
+                cars.v[i] += 1
+
+        # Step 2: Avoid collisions
+        for i in range(cars.numCars):
+            gap = cars.distance(i)
+            if cars.v[i] > gap:
+                cars.v[i] = gap
+
+        # Step 3: Random deceleration
+        for i in range(cars.numCars):
+            if rng.random() < self.p and cars.v[i] > 0:
+                cars.v[i] -= 1
+
+        # Step 4: Move cars
+        for i in range(cars.numCars):
+            cars.x[i] = (cars.x[i] + cars.v[i]) % cars.roadLength
+
+        # Step 5: Compute flow rate (cars crossing a specific point, e.g., x=0)
+        flow_rate = sum(1 for i in range(cars.numCars) if (cars.x[i] - cars.v[i]) % cars.roadLength == 0)
+
+        # Increment time
+        cars.t += 1
+        return flow_rate
+
 
     def draw_cars(cars, cars_drawing):
         """ Used later on to generate the animation """
