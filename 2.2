@@ -48,6 +48,7 @@ class Observables:
     def __init__(self):
         self.time = [] # list to store time
         self.flowrate = [] # list to store the flow rate
+
 class BasePropagator:
     def __init__(self):
         return
@@ -153,6 +154,7 @@ class MyPropagator(BasePropagator):
         for it in range(stepsperframe):
             propagator.propagate(cars, obs)
         return draw_cars(cars, road_drawing),
+
 class Simulation:
     def reset(self, cars=Cars()) :
         self.cars = cars
@@ -173,7 +175,7 @@ class Simulation:
     def run(self,propagator, numsteps=200,  title="simulation"):
         for it in range(numsteps):
             propagator.propagate(self.cars, self.obs)
-            self.plot_observables(title)
+        self.plot_observables(title)
             # Run while displaying the animation of bunch of cars going in circe (slow-ish)
 
     def run_animate(self, propagator,numsteps=200, stepsperframe=1, title="simulation"):
@@ -213,9 +215,9 @@ def main() :
 
     for density in densities:
         numCars = int(density * roadLength)
-        cars = Cars(numCars=numCars, roadLength=roadLength)
+        cars = Cars(numCars=5, roadLength=roadLength)
         simulation = Simulation(cars)
-        propagator = MyPropagator(vmax=2, p=0.5)
+        propagator = MyPropagator(vmax=2, p=0.2)
         simulation.run(propagator, numsteps=500)  # Allow system to equilibrate
         avg_flow_rate = np.mean(simulation.obs.flowrate[-100:])  # Average flow rate
         flow_rates.append(avg_flow_rate)
@@ -229,6 +231,38 @@ def main() :
     plt.show()
 
 
-if __name__ == "__main__" :
-    main()
+# Main simulation function to generate road vs. time plot
+def road_vs_time_plot(vmax=2, p=0.5, numCars=30, roadLength=100, numsteps=200):
+    cars = Cars(numCars=numCars, roadLength=roadLength)
+    propagator = MyPropagator(vmax, p)
+    obs = Observables()
+    # Store positions of cars over time
+    car_positions = []
+
+    for _ in range(numsteps):
+        car_positions.append(list(cars.x))  # Record positions of all cars at this time step
+        propagator.timestep(cars, obs)
+
+    # Prepare data for plotting
+    car_positions = np.array(car_positions)  # Convert to a numpy array for easier indexing
+    time_steps = np.arange(numsteps)  # Time steps
+
+    # Plot road vs. time
+    plt.figure(figsize=(10, 6))
+    for car in range(numCars):
+        plt.scatter(car_positions[:, car], time_steps, s=2, label=f"Car {car + 1}" if car == 0 else "")  # Smaller dots
+
+    plt.title("Road vs. Time")
+    plt.xlabel("Road (Position)")
+    plt.ylabel("Time")
+    plt.xlim(0, roadLength)
+    plt.ylim(0, numsteps)
+    plt.grid(True)
+    plt.legend(["Cars"], loc="upper right", markerscale=3, fontsize=8)
+    plt.show()
+
+
+# Run the simulation and plot
+road_vs_time_plot(vmax=2, p=0.5, numCars=30, roadLength=100, numsteps=200)
+#main()
 
