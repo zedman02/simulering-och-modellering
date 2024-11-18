@@ -134,21 +134,29 @@ class MyPropagator(BasePropagator):
 
         # Calculate the flow rate
         flow_rate = sum(cars.v) / cars.roadLength
-
+        #obs.flowrate.append(flow_rate)  #måste endast vara med när b upg används compute_standard_error()
         # Increment time
         cars.t += 1
         return flow_rate
 
-    def draw_cars(cars, road_drawing):
-        """ Draw cars on a circular or linear road """
-        road_drawing.clear()  # Clear the previous frame
-        road_drawing.set_xlim(0, cars.roadLength)  # Set road limits
-        road_drawing.set_ylim(0, 1)  # Single road lane
-        road_drawing.scatter(cars.x, [0.5] * cars.numCars, c=cars.c, cmap='hsv', s=50)  # Plot cars as dots
-        road_drawing.set_title("Cars on the Road")
-        road_drawing.set_xlabel("Road Position")
-        road_drawing.set_yticks([])  # Hide y-axis
-        road_drawing.grid(True)
+    def draw_cars(cars, ax):
+        """ Draw cars on a circular road """
+        ax.clear()  # Clear the previous frame
+        ax.set_theta_offset(0.5 * np.pi)  # Start at the top
+        ax.set_theta_direction(-1)  # Clockwise direction
+
+        # Convert car positions to polar coordinates
+        theta = [(2 * np.pi * x) / cars.roadLength for x in cars.x]  # Angular position
+        r = [1] * cars.numCars  # Fixed radial position for all cars
+
+        # Generate a colormap for the cars
+        colors = plt.cm.hsv(np.linspace(0, 1, cars.numCars))  # Use HSV colormap
+
+        ax.scatter(theta, r, c=colors, s=50, label="Cars")  # Plot cars as dots
+        ax.set_yticks([])  # Hide radial axis
+        ax.set_xticks([])  # Hide angular axis
+        ax.legend(loc="upper right")
+        ax.set_title("Cars on a Circular Road")
 
     def animate(framenr, cars, obs, propagator, road_drawing, stepsperframe):
         """ Animation function which integrates a few steps and return a drawing """
@@ -178,6 +186,10 @@ class Simulation:
             propagator.propagate(self.cars, self.obs)
         self.plot_observables(title)
             # Run while displaying the animation of bunch of cars going in circe (slow-ish)
+
+    def run_once(self,propagator, numsteps=200,  title="simulation"):
+        for it in range(numsteps):
+            propagator.propagate(self.cars, self.obs)
 
     def run_animate(self, propagator,numsteps=200, stepsperframe=1, title="simulation"):
         numframes = int(numsteps / stepsperframe)
@@ -216,9 +228,9 @@ def main() :
 
     for density in densities:
         numCars = int(density * roadLength)
-        cars = Cars(numCars=5, roadLength=roadLength)
+        cars = Cars(numCars=numCars, roadLength=roadLength)
         simulation = Simulation(cars)
-        propagator = MyPropagator(vmax=2, p=0.2)
+        propagator = MyPropagator(vmax=2, p=0.5)
         simulation.run(propagator, numsteps=500)  # Allow system to equilibrate
         avg_flow_rate = np.mean(simulation.obs.flowrate[-100:])  # Average flow rate
         flow_rates.append(avg_flow_rate)
@@ -233,7 +245,7 @@ def main() :
 
 
 # Main simulation function to generate road vs. time plot
-def road_vs_time_plot(vmax=2, p=0.5, numCars=30, roadLength=100, numsteps=200):
+def road_vs_time_plot(vmax, p, numCars, roadLength, numsteps):
     cars = Cars(numCars=numCars, roadLength=roadLength)
     propagator = MyPropagator(vmax, p)
     obs = Observables()
@@ -265,27 +277,177 @@ def road_vs_time_plot(vmax=2, p=0.5, numCars=30, roadLength=100, numsteps=200):
 
 
 
-
-def animate_cars(vmax=2, p=0.5, numCars=30, roadLength=100, numsteps=200, interval=100):
+def animate_cars_circular(vmax, p, numCars, roadLength, numsteps, interval):
     cars = Cars(numCars=numCars, roadLength=roadLength)
     propagator = MyPropagator(vmax, p)
 
     # Set up the figure and axis
-    fig, ax = plt.subplots(figsize=(10, 2))
+    fig, ax = plt.subplots(figsize=(6, 6), subplot_kw={'projection': 'polar'})
 
     def update(frame):
         """ Update function for animation """
         propagator.timestep(cars, Observables())  # Update cars' positions
-        MyPropagator.draw_cars(cars, ax)  # Draw cars on the road
+        MyPropagator.draw_cars(cars, ax)  # Draw cars on the circular road
 
     ani = animation.FuncAnimation(
         fig, update, frames=numsteps, interval=interval, repeat=False
     )
     plt.show()
 
+
+
+def run_simulation_once(roadLength=50, numCars=25, vmax=2, p=0.5, equilibration_steps=1000, measurement_steps=100):
+    """Run a single simulation and return the average flow rate over the measurement steps."""
+    cars = Cars(numCars=numCars, roadLength=roadLength)
+    propagator = MyPropagator(vmax, p)
+    obs = Observables()
+
+    # Equilibrate the system
+    for _ in range(equilibration_steps):
+        propagator.timestep(cars, obs)
+
+    # Measure flow rate over the next 100 steps
+    flow_rates = []
+    for _ in range(measurement_steps):
+        propagator.timestep(cars, obs)
+        flow_rates.append(obs.flowrate)
+
+    # Return the average flow rate during the measurement steps
+    return np.mean(flow_rates)
+
+def compute_standard_error(target_se=0.001, max_simulations=10000):
+    """Run multiple simulations to compute the standard error and required number of simulations."""
+    flow_rates = []
+    for i in range(max_simulations):
+        flow_rate = run_simulation_once()
+        flow_rates.append(flow_rate)
+
+        # Compute the standard error after each simulation
+        mean_flow_rate = np.mean(flow_rates)
+        std_dev = np.std(flow_rates, ddof=1)
+        se = std_dev / np.sqrt(len(flow_rates))
+
+        # Print progress
+        print(f"Simulation {i+1}: Mean Flow Rate = {mean_flow_rate:.5f}, SE = {se:.5f}")
+
+        # Stop if the standard error meets the target
+        if se <= target_se:
+            print(f"Target standard error of {target_se} reached after {i+1} simulations.")
+            return mean_flow_rate, se, i+1
+
+    # If the target SE is not reached within the max simulations
+    print(f"Target standard error not reached after {max_simulations} simulations.")
+    return np.mean(flow_rates), se, max_simulations
+
+def test_equilibration(roadLength=50, numCars=25, vmax=2, p=0.5, total_steps=1000):
+    """Skiten funkar inte riktigt"""
+    cars = Cars(numCars=numCars, roadLength=roadLength)
+    propagator = MyPropagator(vmax, p)
+    obs = Observables()
+
+    # Run the simulation for total_steps
+    for _ in range(total_steps):
+        propagator.timestep(cars, obs)
+
+    # Plot flow rate over time
+    plt.plot(obs.time, obs.flowrate, label="Flow Rate")
+    plt.axvline(x=500, color="red", linestyle="--", label="Equilibration Point (500)")
+    plt.xlabel("Time Steps")
+    plt.ylabel("Flow Rate")
+    plt.title("Flow Rate vs. Time")
+    plt.legend()
+    plt.grid()
+    plt.show()
+
+
+def analyze_system_size():
+    roadLengths = np.linspace(10, 200, 20)  # Road lengths from 10 to 200
+    density = 0.5  # Fixed density
+    flow_rates = []
+    equilibration_steps = []  # Store equilibration times for each road length
+
+    for l in roadLengths:
+        numCars = int(density * l)  # Calculate number of cars
+        cars = Cars(numCars=numCars, roadLength=int(l))  # Create cars for this road length
+        simulation = Simulation(cars)
+        propagator = MyPropagator(vmax=2, p=0.5)
+
+        # Adjust equilibration time based on road length (longer for larger systems)
+        equilibration_time = int(l * 5)  # Example: 5 steps per unit road length
+        equilibration_steps.append(equilibration_time)
+
+        # Run the simulation
+        simulation.run_once(propagator, numsteps=equilibration_time + 100)  # Include measurement steps
+        avg_flow_rate = np.mean(simulation.obs.flowrate[-100:])  # Average over last 100 steps
+        flow_rates.append(avg_flow_rate)
+
+    # Plot flow rate vs. road length
+    plt.figure(figsize=(10, 6))
+    plt.plot(roadLengths, flow_rates, marker='o')
+    plt.xlabel("Road Length")
+    plt.ylabel("Flow Rate")
+    plt.title("Flow Rate vs Road Length at Fixed Density")
+    plt.grid()
+    plt.show()
+
+    # Analyze convergence
+    print("Equilibration Steps for Each Road Length:")
+    for r, eq_time, flow in zip(roadLengths, equilibration_steps, flow_rates):
+        print(f"Road Length: {r}, Equilibration Steps: {eq_time}, Flow Rate: {flow:.4f}")
+
+
+def plot_flow_rate_vs_road_length(density=0.5, roadLengths=np.linspace(10, 200, 20), vmax=2, p=0.5, equilibration_factor=5, measurement_steps=100):
+    """
+    Plot flow rate vs road length at a constant density.
+
+    Parameters:
+    - density: Fixed density (number of cars / road length).
+    - roadLengths: Array of road lengths to simulate.
+    - vmax: Maximum car velocity.
+    - p: Probability of random deceleration.
+    - equilibration_factor: Factor to scale equilibration steps (e.g., equilibration = roadLength * factor).
+    - measurement_steps: Number of steps to measure flow rate.
+    """
+    flow_rates = []  # Store flow rates for each road length
+
+    for roadLength in roadLengths:
+        numCars = int(density * roadLength)  # Calculate number of cars for the fixed density
+        cars = Cars(numCars=numCars, roadLength=int(roadLength))
+        simulation = Simulation(cars)
+        propagator = MyPropagator(vmax, p)
+
+        # Equilibration steps depend on road length
+        equilibration_steps = int(roadLength * equilibration_factor)
+
+        # Run the simulation
+        simulation.run(propagator, numsteps=equilibration_steps + measurement_steps)
+
+        # Measure flow rate
+        avg_flow_rate = np.mean(simulation.obs.flowrate[-measurement_steps:])  # Average flow rate over last steps
+        flow_rates.append(avg_flow_rate)
+
+    # Plot flow rate vs road length
+    plt.figure(figsize=(10, 6))
+    plt.plot(roadLengths, flow_rates, marker='o')
+    plt.xlabel("Road Length")
+    plt.ylabel("Flow Rate (Cars per Unit Time)")
+    plt.title(f"Flow Rate vs Road Length (Density = {density})")
+    plt.grid()
+    plt.show()
+
+
+plot_flow_rate_vs_road_length()
+
+#test_equilibration()
+# Run the computation
+#mean_flow_rate, final_se, num_simulations = compute_standard_error(target_se=0.001)
+
+#print(f"Final Results: Mean Flow Rate = {mean_flow_rate:.5f}, Final SE = {final_se:.5f}, Simulations = {num_simulations}")
+
 # Run the simulation and plot
-road_vs_time_plot(vmax=2, p=0.5, numCars=30, roadLength=100, numsteps=200)
-animate_cars(vmax=2, p=0.5, numCars=30, roadLength=100, numsteps=200, interval=100)
+#road_vs_time_plot(vmax=5, p=0.5, numCars=30, roadLength=100, numsteps=200)
+#animate_cars_circular(vmax=5, p=0.1, numCars=30, roadLength=100, numsteps=200, interval=100)
+
 
 #main()
 
