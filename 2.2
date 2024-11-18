@@ -38,11 +38,10 @@ class Cars:
             # NOTE: you can, but don't have to use this function for computing distances
 
     def distance(self, i):
-        # Find the position of the car in front of car i
+        # Find the position of the car in front
         front = (i + 1) % self.numCars
-        # Calculate the periodic distance
+        # Compute the periodic distance
         return (self.x[front] - self.x[i]) % self.roadLength
-
 
 class Observables:
     """ Class for storing observables """
@@ -104,40 +103,40 @@ class ConstantPropagator(BasePropagator) :
         # Define you own class which inherits from BasePropagator (e.g. MyPropagator(BasePropagator))
         # and implement timestep according to the rule described in the project
 
-class MyPropagator(BasePropagator) :
+class MyPropagator(BasePropagator):
     def __init__(self, vmax, p):
-        BasePropagator.__init__(self)
+        super().__init__()
         self.vmax = vmax
         self.p = p
 
     def timestep(self, cars, obs):
-
         # Step 1: Acceleration
         for i in range(cars.numCars):
             if cars.v[i] < self.vmax:
                 cars.v[i] += 1
 
-        # Step 2: Avoid collisions
+        # Step 2: Prevent collisions
         for i in range(cars.numCars):
-            gap = cars.distance(i)
-            if cars.v[i] > gap:
-                cars.v[i] = gap
+            gap = cars.distance(i)  # Compute distance to the next car
+            if cars.v[i] >= gap:
+                cars.v[i] = gap - 1
 
         # Step 3: Random deceleration
         for i in range(cars.numCars):
             if rng.random() < self.p and cars.v[i] > 0:
                 cars.v[i] -= 1
 
-        # Step 4: Move cars
+        # Step 4: Update positions
         for i in range(cars.numCars):
             cars.x[i] = (cars.x[i] + cars.v[i]) % cars.roadLength
 
-        # Step 5: Compute flow rate (cars crossing a specific point, e.g., x=0)
-        flow_rate = sum(1 for i in range(cars.numCars) if (cars.x[i] - cars.v[i]) % cars.roadLength == 0)
+        # Calculate the flow rate
+        flow_rate = sum(cars.v) / cars.roadLength
 
         # Increment time
         cars.t += 1
         return flow_rate
+
 
 
     def draw_cars(cars, cars_drawing):
@@ -200,15 +199,34 @@ def main() :
     # Here you can define one or more instances of cars, with possibly different parameters,
     # and pass them to the simulator
     # Be sure you are passing the correct initial conditions!
-    cars = Cars(numCars = 5, roadLength=50)
+    #cars = Cars(numCars = 5, roadLength=50)
     # Create the simulation object for your cars instance:
-    simulation = Simulation(cars)
+    #simulation = Simulation(cars)
     # simulation.run_animate(propagator=ConstantPropagator())
-    simulation.run_animate(propagator=MyPropagator(vmax=2, p=0.2))
+    #simulation.run_animate(propagator=MyPropagator(vmax=2, p=0.2))
     # Calling 'main()' if the script is executed.
     # If the script is instead just imported, main is not called (this can be useful if you want to
     # write another script importing and utilizing the functions and classes defined in this one)
+    roadLength = 100
+    densities = np.linspace(0.1, 1.0, 10)  # Densities from 0.1 to 1.0
+    flow_rates = []
 
+    for density in densities:
+        numCars = int(density * roadLength)
+        cars = Cars(numCars=numCars, roadLength=roadLength)
+        simulation = Simulation(cars)
+        propagator = MyPropagator(vmax=2, p=0.5)
+        simulation.run(propagator, numsteps=500)  # Allow system to equilibrate
+        avg_flow_rate = np.mean(simulation.obs.flowrate[-100:])  # Average flow rate
+        flow_rates.append(avg_flow_rate)
+
+    # Plot the fundamental diagram
+    plt.plot(densities, flow_rates, marker='o')
+    plt.xlabel('Density')
+    plt.ylabel('Flow Rate')
+    plt.title('Fundamental Diagram')
+    plt.grid()
+    plt.show()
 
 
 if __name__ == "__main__" :
