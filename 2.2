@@ -377,7 +377,7 @@ def analyze_system_size():
         equilibration_steps.append(equilibration_time)
 
         # Run the simulation
-        simulation.run_once(propagator, numsteps=equilibration_time + 100)  # Include measurement steps
+        simulation.run(propagator, numsteps=equilibration_time + 100)  # Include measurement steps
         avg_flow_rate = np.mean(simulation.obs.flowrate[-100:])  # Average over last 100 steps
         flow_rates.append(avg_flow_rate)
 
@@ -396,27 +396,28 @@ def analyze_system_size():
         print(f"Road Length: {r}, Equilibration Steps: {eq_time}, Flow Rate: {flow:.4f}")
 
 
-def plot_flow_rate_vs_road_length(density=0.5, roadLengths=np.linspace(10, 200, 20), vmax=2, p=0.5, equilibration_factor=5, measurement_steps=100):
+def plot_flow_vs_roadlength(density=0.5, roadLengths=np.linspace(10, 200, 20), vmax=2, p=0.5, equilibration_factor=5,
+                            measurement_steps=100):
     """
-    Plot flow rate vs road length at a constant density.
+    Plot Flow Rate vs Road Length for a fixed density.
 
     Parameters:
     - density: Fixed density (number of cars / road length).
-    - roadLengths: Array of road lengths to simulate.
+    - roadLengths: Array of road lengths to analyze.
     - vmax: Maximum car velocity.
     - p: Probability of random deceleration.
-    - equilibration_factor: Factor to scale equilibration steps (e.g., equilibration = roadLength * factor).
+    - equilibration_factor: Multiplier for equilibration steps (e.g., roadLength * factor).
     - measurement_steps: Number of steps to measure flow rate.
     """
     flow_rates = []  # Store flow rates for each road length
 
     for roadLength in roadLengths:
-        numCars = int(density * roadLength)  # Calculate number of cars for the fixed density
+        numCars = int(density * roadLength)  # Calculate number of cars based on fixed density
         cars = Cars(numCars=numCars, roadLength=int(roadLength))
         simulation = Simulation(cars)
         propagator = MyPropagator(vmax, p)
 
-        # Equilibration steps depend on road length
+        # Adjust equilibration time based on road length
         equilibration_steps = int(roadLength * equilibration_factor)
 
         # Run the simulation
@@ -426,7 +427,7 @@ def plot_flow_rate_vs_road_length(density=0.5, roadLengths=np.linspace(10, 200, 
         avg_flow_rate = np.mean(simulation.obs.flowrate[-measurement_steps:])  # Average flow rate over last steps
         flow_rates.append(avg_flow_rate)
 
-    # Plot flow rate vs road length
+    # Plot flow rate vs. road length
     plt.figure(figsize=(10, 6))
     plt.plot(roadLengths, flow_rates, marker='o')
     plt.xlabel("Road Length")
@@ -436,8 +437,7 @@ def plot_flow_rate_vs_road_length(density=0.5, roadLengths=np.linspace(10, 200, 
     plt.show()
 
 
-plot_flow_rate_vs_road_length()
-
+plot_flow_vs_roadlength()
 #test_equilibration()
 # Run the computation
 #mean_flow_rate, final_se, num_simulations = compute_standard_error(target_se=0.001)
@@ -451,3 +451,11 @@ plot_flow_rate_vs_road_length()
 
 #main()
 
+"""
+-Kommentera bort det som plottar alla simulation i både main och analyze system
+-Vi vill öka roadlength och minska stepsize för att se mer data 
+-Kommentera och städa upp koden så att andra kan använda den
+-Svara på fråga 2.6 Lite nogrannare, inte helt klar med den. 
+-Leka runt med road och cirkel plottarna för att kunna svara på d och e. 
+
+"""
