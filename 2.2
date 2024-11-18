@@ -20,7 +20,7 @@ import numpy.random as rng
 import numpy as np
 import matplotlib
 class Cars:
-""" Class for the state of a number of cars """
+    """ Class for the state of a number of cars """
     def __init__(self, numCars=5, roadLength=50, v0=1):
         self.numCars = numCars
         self.roadLength = roadLength
@@ -38,8 +38,11 @@ class Cars:
             # NOTE: you can, but don't have to use this function for computing distances
 
     def distance(self, i):
-            # TODO: Implement the function returning the PERIODIC distance
-        # between car i and the one in front
+        # Find the position of the car in front of car i
+        front = (i + 1) % self.numCars
+        # Calculate the periodic distance
+        return (self.x[front] - self.x[i]) % self.roadLength
+
 
 class Observables:
     """ Class for storing observables """
@@ -58,8 +61,34 @@ class BasePropagator:
         obs.flowrate.append(fr)
 
     def timestep(self, cars, obs):
-        """ Virtual method: implemented by the child classes """
-        pass
+        # Step 1: Acceleration
+        for i in range(cars.numCars):
+            if cars.v[i] < self.vmax:
+                cars.v[i] += 1
+
+        # Step 2: Avoid collisions
+        for i in range(cars.numCars):
+            gap = cars.distance(i)
+            if cars.v[i] > gap:
+                cars.v[i] = gap
+
+        # Step 3: Random deceleration
+        for i in range(cars.numCars):
+            if rng.random() < self.p and cars.v[i] > 0:
+                cars.v[i] -= 1
+
+        # Step 4: Move cars
+        for i in range(cars.numCars):
+            cars.x[i] = (cars.x[i] + cars.v[i]) % cars.roadLength
+
+        # Step 5: Compute flow rate (cars crossing a specific point, e.g., x=0)
+        flow_rate = sum(1 for i in range(cars.numCars) if (cars.x[i] - cars.v[i]) % cars.roadLength == 0)
+
+        # Increment time
+        cars.t += 1
+        return flow_rate
+
+
 class ConstantPropagator(BasePropagator) :
     """
     Cars do not interact: each position is just
