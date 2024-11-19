@@ -1,0 +1,319 @@
+import random
+import matplotlib.pyplot as plt
+import numpy as np
+
+def random_walk_a(steps):
+    # Starting position
+    x, y = 0, 0
+    x_positions = [x]
+    y_positions = [y]
+
+    # Generate the random walk
+    for _ in range(steps):
+        direction = int(random.random() * 4)  # Randomly pick a direction (0, 1, 2, or 3)
+        if direction == 0:
+            x += 1  # Move right
+        elif direction == 1:
+            x -= 1  # Move left
+        elif direction == 2:
+            y += 1  # Move up
+        elif direction == 3:
+            y -= 1  # Move down
+        x_positions.append(x)
+        y_positions.append(y)
+    
+    return x_positions, y_positions
+
+def plot_a():
+    # Define steps for different walks
+    steps_list = [10, 100, 1000]
+    colors = ['blue', 'green', 'red']
+
+    plt.figure(figsize=(10, 10))
+
+    for steps, color in zip(steps_list, colors):
+        x_positions, y_positions = random_walk_a(steps)
+        plt.plot(x_positions, y_positions, label=f'{steps} steps', color=color)
+
+    # Plot details
+    plt.title("2D Random Walks")
+    plt.axhline(0, color='black', linewidth=0.5, linestyle='--')
+    plt.axvline(0, color='black', linewidth=0.5, linestyle='--')
+    plt.legend()
+    plt.grid(True)
+    plt.show()
+
+def simple_random_generator(a, c, m, r0, steps):
+    """
+    Simple random number generator using the formula:
+    r_n = (a * r_{n-1} + c) % m
+    """
+    random_numbers = []
+    rn = r0
+    for _ in range(steps):
+        rn = (a * rn + c) % m
+        random_numbers.append(rn)
+    return random_numbers
+
+def random_walk_b(a, c, m, r0, steps):
+    # Generate random numbers
+    random_numbers = simple_random_generator(a, c, m, r0, steps)
+    
+    # Convert random numbers to directions (0, 1, 2, 3)
+    directions = [r // (m // 4) for r in random_numbers]
+    
+    # Starting position
+    x, y = 0, 0
+    x_positions = [x]
+    y_positions = [y]
+
+    # Generate the walk based on directions
+    for direction in directions:
+        if direction == 0:
+            x += 1  # Move right
+        elif direction == 1:
+            x -= 1  # Move left
+        elif direction == 2:
+            y += 1  # Move up
+        elif direction == 3:
+            y -= 1  # Move down
+        x_positions.append(x)
+        y_positions.append(y)
+    
+    return x_positions, y_positions
+
+def plot_b(a,c,m,r0):
+    # Parameters to test
+   
+    steps = 1000
+    plt.figure(figsize=(10, 10))
+    
+    x_positions, y_positions = random_walk_b(a, c, m, r0, steps)
+    plt.plot(x_positions, y_positions, "r",label=f"a={a}, c={c}, m={m}, r0={r0}", )
+
+    # Plot details
+    plt.title("2D Random Walk with Custom RNG")
+    plt.legend()
+    plt.grid(True)
+    plt.show()
+
+def rmsf(num_walks, step_counts):
+    rms_distances = []
+    fluctuations = []
+    standard_devs = []
+
+    for steps in step_counts:
+        distances = []
+        squared_distances = []
+
+        for _ in range(num_walks):
+            x, y = random_walk_a(steps)
+            x_final, y_final = x[-1], y[-1]
+            distance = np.sqrt(x_final**2 + y_final**2)  # End-to-end distance
+            distances.append(distance)
+            squared_distances.append(distance**2)
+
+        mean_squared_distance = np.mean(squared_distances)
+        mean_distance = np.mean(distances)
+
+        rms_distance = np.sqrt(mean_squared_distance)  # RMS distance
+        rms_fluctuation = np.sqrt((mean_squared_distance - mean_distance**2) * num_walks/ (num_walks - 1))
+        std_dev = np.sqrt((mean_squared_distance - mean_distance**2) / (num_walks - 1))
+
+        rms_distances.append(rms_distance)
+        fluctuations.append(rms_fluctuation)
+        standard_devs.append(std_dev)
+
+    return step_counts, rms_distances, fluctuations, standard_devs
+
+def plot_c(): 
+    # Simulation parameters
+    num_walks = 100  # Number of walks
+    step_counts = list(range(1, 1001, 100))  
+
+    # Calculate metrics
+    steps, rms_distances, fluctuations, standard_devs = rmsf(num_walks, step_counts)
+
+    # Plotting
+    plt.figure(figsize=(12, 6))
+
+    # Plot RMS Distance
+    plt.plot(steps, rms_distances, label="RMS Distance (sqrt(<R^2>))", marker='o')
+
+    # Plot RMS Fluctuations
+    plt.plot(steps, fluctuations, label="RMS Fluctuation", marker='o')
+
+    # Plot Standard Deviation
+    plt.plot(steps, standard_devs, label="Standard Error Estimate", marker='o')
+
+    # Plot details
+    plt.title("RMSF vs Steps, 100 simulations")
+    plt.xlabel("Number of Steps")
+    plt.ylabel("Distance")
+    plt.legend()
+    plt.grid(True)
+    plt.show()
+
+def self_avoiding_random_walk(steps, avoid_backtracking=False):
+    """
+    Generates a self-avoiding random walk (SAW).
+    Terminates if a site is revisited.
+    """
+    x, y = 0, 0
+    visited_sites = {(x, y)}  # Store visited sites
+    path = [(x, y)]
+    directions = [(1, 0), (-1, 0), (0, 1), (0, -1)]  # Right, Left, Up, Down
+
+    for _ in range(steps):
+        if avoid_backtracking and len(path) > 1:
+            # Avoid backtracking: Remove direction pointing back to the previous site
+            prev_x, prev_y = path[-2]
+            current_x, current_y = path[-1]
+            backtracking_direction = (current_x-prev_x, current_y-prev_y)
+            allowed_directions = [d for d in directions if d != backtracking_direction]
+        else:
+            allowed_directions = directions
+
+        # Shuffle directions and try valid moves
+        random.shuffle(allowed_directions)
+        move_made = False
+
+        for dx, dy in allowed_directions:
+            new_x, new_y = x + dx, y + dy
+            if (new_x, new_y) not in visited_sites:
+                x, y = new_x, new_y
+                visited_sites.add((x, y))
+                path.append((x, y))
+                move_made = True
+                break
+
+        if not move_made:  # No valid moves left
+            return False, path
+
+    return True, path
+
+def analyze_success_rate(max_steps, num_walks, avoid_backtracking=False):
+    """
+    Analyzes the success rate of self-avoiding random walks.
+
+    Parameters:
+        max_steps: int - Maximum number of steps to simulate.
+        num_walks: int - Number of walks for each step count.
+        avoid_backtracking: bool - If True, uses the backtracking avoidance improvement.
+
+    Returns:
+        step_counts: list - Number of steps simulated.
+        success_rates: list - Fraction of successful walks for each step count.
+    """
+    step_counts = list(range(0, max_steps + 1, 1))
+    success_rates = []
+
+    for steps in step_counts:
+        successes = 0
+        for _ in range(num_walks):
+            success, _ = self_avoiding_random_walk(steps, avoid_backtracking)
+            if success:
+                successes += 1
+        success_rate = successes / num_walks
+        success_rates.append(success_rate)
+
+    return step_counts, success_rates
+
+
+def plot_d():
+# Simulation parameters
+    max_steps = 30  # Maximum number of steps
+    num_walks = 100  # Number of walks per step count
+
+    # Analyze without and with backtracking avoidance
+    steps, success_rates_no_backtracking = analyze_success_rate(max_steps, num_walks, avoid_backtracking=False)
+    _, success_rates_with_backtracking = analyze_success_rate(max_steps, num_walks, avoid_backtracking=True)
+
+    # Plot the success rates
+    plt.figure(figsize=(10, 6))
+    plt.plot(steps, success_rates_no_backtracking, label="No Backtracking Avoidance", marker='o')
+    plt.plot(steps, success_rates_with_backtracking, label="With Backtracking Avoidance", marker='o')
+    plt.title("Success Rate of Self-Avoiding Random Walks")
+    plt.xlabel("Number of Steps (N)")
+    plt.ylabel("Success Rate")
+    plt.legend()
+    plt.grid(True)
+    plt.show()
+
+
+def plot_random_walk_paths(steps):
+    """
+    Generates and plots paths for self-avoiding random walks with and without
+    backtracking avoidance for a fixed number of steps.
+
+    Parameters:
+        steps: int - Number of steps for the random walks.
+    """
+    # Generate paths
+    _, path_no_backtracking = self_avoiding_random_walk(steps, avoid_backtracking=False)
+    _, path_with_backtracking = self_avoiding_random_walk(steps, avoid_backtracking=True)
+
+    # Extract x and y positions
+    x_no_back, y_no_back = zip(*path_no_backtracking)
+    x_with_back, y_with_back = zip(*path_with_backtracking)
+
+    # Plot paths
+    plt.figure(figsize=(12, 6))
+
+    # No Backtracking Avoidance
+    plt.subplot(1, 2, 1)
+    plt.plot(x_no_back, y_no_back, marker='o', markersize=2, label="No Backtracking Avoidance")
+    plt.title("Path without Backtracking Avoidance")
+    plt.grid(True)
+    plt.legend()
+
+    # Backtracking Avoidance
+    plt.subplot(1, 2, 2)
+    plt.plot(x_with_back, y_with_back, marker='o', markersize=2, label="With Backtracking Avoidance")
+    plt.title("Path with Backtracking Avoidance")
+    plt.grid(True)
+    plt.legend()
+
+    plt.tight_layout()
+    plt.show()
+
+def plot_e(num_walks, step_counts):
+    rms_distances = []
+    fluctuations = []
+    standard_devs = []
+
+    for steps in step_counts:
+        distances = []
+        squared_distances = []
+
+        for _ in range(num_walks):
+            x, y = random_walk_a(steps)
+            x_final, y_final = x[-1], y[-1]
+            distance = np.sqrt(x_final**2 + y_final**2)  # End-to-end distance
+            distances.append(distance)
+            squared_distances.append(distance**2)
+
+        mean_squared_distance = np.mean(squared_distances)
+        mean_distance = np.mean(distances)
+
+        rms_distance = np.sqrt(mean_squared_distance)  # RMS distance
+        rms_fluctuation = np.sqrt((mean_squared_distance - mean_distance**2) * num_walks/ (num_walks - 1))
+        std_dev = np.sqrt((mean_squared_distance - mean_distance**2) / (num_walks - 1))
+
+        rms_distances.append(rms_distance)
+        fluctuations.append(rms_fluctuation)
+        standard_devs.append(std_dev)
+
+    return step_counts, rms_distances, fluctuations, standard_devs
+
+# Set steps for the path
+steps = 1000
+
+# Plot paths
+#plot_random_walk_paths(steps)
+
+
+plot_d()
+
+#plot_b(2,2,68,1)
+#plot_c()
