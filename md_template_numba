@@ -1,0 +1,188 @@
+import math
+import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib import animation
+import random as rnd
+import md_force_calculator as md  # Local library for force calculations (optimized with numba)
+
+# Constants
+kB = 1.0  # Boltzmann constant
+N_OUTPUT_HEAT_CAP = 1000  # Number of steps between heat capacity output
+N_STEPS_THERMO = 10  # Steps between thermostat applications
+DISK_SIZE = 750  # Disk size for visualization
+
+class MDsimulator:
+    """
+    Class for performing Molecular Dynamics simulations
+    """
+    def __init__(self, n=48, mass=1.0, numPerRow=8, initial_spacing=1.12,
+                 T=0.4, dt=0.01, nsteps=20000, numStepsPerFrame=100,
+                 startStepForAveraging=100):
+        """
+        Constructor to initialize the simulation parameters and system state.
+        """
+        # Initialize parameters and box
+        self.n = n
+        self.mass = mass
+        self.invmass = 1.0 / mass
+        self.numPerRow = numPerRow
+        self.Lx = numPerRow * initial_spacing
+        self.Ly = numPerRow * initial_spacing
+        self.area = self.Lx * self.Ly
+        self.T = T
+        self.kBT = kB * T
+        self.dt = dt
+        self.nsteps = nsteps
+        self.numStepsPerFrame = numStepsPerFrame
+
+        # Initialize positions
+        self.x = []
+        self.y = []
+        for i in range(n):
+            self.x.append(self.Lx * 0.95 / numPerRow * ((i % numPerRow) + 0.5 * (i // numPerRow)))
+            self.y.append(self.Lx * 0.95 / numPerRow * 0.87 * (i // numPerRow))
+        self.x = np.array(self.x)
+        self.y = np.array(self.y)
+
+        # Initialize velocities and forces
+        self.vx = np.zeros(n, dtype=float)
+        self.vy = np.zeros(n, dtype=float)
+        self.fx = np.zeros(n, dtype=float)
+        self.fy = np.zeros(n, dtype=float)
+
+        # Initialize velocities based on temperature
+        md.thermalize(self.vx, self.vy, np.sqrt(self.kBT / self.mass))
+
+        # Initialize energy containers
+        self.sumEkin = self.sumEpot = self.sumEtot = self.sumEtot2 = self.sumVirial = 0
+        self.outt = []
+        self.ekinList = []
+        self.epotList = []
+        self.etotList = []
+        self.startStepForAveraging = startStepForAveraging
+        self.step = 0
+        self.Epot = 0
+        self.Ekin = 0
+        self.Virial = 0
+        self.Cv = 0
+        self.P = 0
+
+    def clear_energy_potential(self):
+        """
+        Resets potential and kinetic energy and forces.
+        """
+        self.Epot = 0
+        self.Ekin = 0
+        self.Virial = 0
+        self.fx.fill(0)
+        self.fy.fill(0)
+
+    def update_forces(self):
+        """
+        Updates forces and calculates potential energy.
+        """
+        tEpot, tVirial = md.quick_force_calculation(self.x, self.y, self.fx, self.fy, self.Lx, self.Ly, self.n)
+        self.Epot += tEpot
+        self.Virial += tVirial
+
+    def propagate(self):
+        """
+        Propagates the system one time step using the Velocity Verlet algorithm.
+        """
+        for i in range(self.n):
+            if self.step > 0:
+                self.vx[i] += self.fx[i] * self.invmass * 0.5 * self.dt
+                self.vy[i] += self.fy[i] * self.invmass * 0.5 * self.dt
+                self.Ekin += 0.5 * self.mass * (self.vx[i] ** 2 + self.vy[i] ** 2)
+                self.vx[i] += self.fx[i] * self.invmass * 0.5 * self.dt
+                self.vy[i] += self.fy[i] * self.invmass * 0.5 * self.dt
+
+            # Update positions
+            self.x[i] += self.vx[i] * self.dt
+            self.y[i] += self.vy[i] * self.dt
+
+            # Periodic boundary conditions
+            self.x[i] %= self.Lx
+            self.y[i] %= self.Ly
+
+    def md_step(self):
+        """
+        Performs a full Molecular Dynamics step.
+        """
+        self.clear_energy_potential()
+        self.update_forces()
+        if self.step > self.startStepForAveraging:
+            self.sumVirial += self.Virial
+            self.sumEpot += self.Epot
+            self.sumEtot += self.Epot + self.Ekin
+            self.sumEtot2 += (self.Epot + self.Ekin) ** 2
+        self.propagate()
+        if self.step > self.startStepForAveraging:
+            self.sumEkin += self.Ekin
+        self.step += 1
+
+    def integrate_some_steps(self, framenr=None):
+        """
+        Integrates the system for a defined number of steps.
+        """
+        for _ in range(self.numStepsPerFrame):
+            self.md_step()
+        t = self.step * self.dt
+        self.outt.append(t)
+        self.ekinList.append(self.Ekin)
+        self.epotList.append(self.Epot)
+        self.etotList.append(self.Epot + self.Ekin)
+        if self.step >= self.startStepForAveraging and self.step % N_OUTPUT_HEAT_CAP == 0:
+            EkinAv = self.sumEkin / (self.step + 1 - self.startStepForAveraging)
+            EtotAv = self.sumEtot / (self.step + 1 - self.startStepForAveraging)
+            Etot2Av = self.sumEtot2 / (self.step + 1 - self.startStepForAveraging)
+            VirialAV = self.sumVirial / (self.step + 1 - self.startStepForAveraging)
+            self.Cv = (Etot2Av - EtotAv ** 2) / (self.kBT * self.T)
+            self.P = (2.0 / self.area) * (EkinAv - VirialAV)
+            print(f'time {t}, Cv = {self.Cv}, P = {self.P}')
+
+    def snapshot(self, framenr=None):
+        """
+        Produces a snapshot for animation.
+        """
+        self.integrate_some_steps(framenr)
+        return self.ax.scatter(self.x, self.y, s=DISK_SIZE, marker='o', c="r"),
+
+    def simulate(self):
+        """
+        Simulates the system for the specified number of steps.
+        """
+        nn = self.nsteps // self.numStepsPerFrame
+        print(f"Integrating for {nn * self.numStepsPerFrame} steps...")
+        for _ in range(nn):
+            self.integrate_some_steps()
+
+    def simulate_animate(self):
+        """
+        Simulates and animates the system in real time.
+        """
+        self.fig = plt.figure()
+        self.ax = plt.subplot(xlim=(0, self.Lx), ylim=(0, self.Ly))
+        nn = self.nsteps // self.numStepsPerFrame
+        print(f"Integrating for {nn * self.numStepsPerFrame} steps...")
+        self.anim = animation.FuncAnimation(self.fig, self.snapshot, frames=nn, interval=50, blit=True, repeat=False)
+        plt.axis('square')
+        plt.show()
+
+    def plot_energy(self, title="energies"):
+        """
+        Plots kinetic, potential, and total energy over time.
+        """
+        plt.figure()
+        plt.xlabel('time')
+        plt.ylabel('energy')
+        plt.plot(self.outt, self.ekinList, self.outt, self.epotList, self.outt, self.etotList)
+        plt.legend(('Ekin', 'Epot', 'Etot'))
+        plt.savefig(title + ".pdf")
+        plt.show()
+
+def exercise_32a():
+    pass  # Placeholder for specific exercises
+
+if __name__ == "__main__":
+    exercise_32a()
