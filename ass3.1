@@ -1,0 +1,119 @@
+import numpy as np
+import matplotlib.pyplot as plt
+
+
+def metropolis(delta, n_steps, burn_in):
+    """
+    Metropolis algorithm to estimate <x> for the distribution P(x) = exp(-x).
+
+    Parameters:
+        delta (float): Step size for proposal distribution.
+        n_steps (int): Total number of steps in the simulation.
+        burn_in (int): Number of initial steps to discard (burn-in).
+
+    Returns:
+        samples (list): Accepted samples after burn-in.
+        acceptance_rate (float): Acceptance rate of the Metropolis algorithm.
+    """
+    samples = []
+    x = 0.0  # Initial position
+    accepted = 0  # Counter for accepted moves
+
+    for step in range(n_steps):
+        # Propose a new x
+        x_new = x + np.random.uniform(-delta, delta)
+
+        # Compute the acceptance probability
+        if x_new < 0:
+            p_accept = 0
+        else:
+            p_accept = min(1, np.exp(-x_new) / np.exp(-x))
+
+        # Accept or reject the move
+        if np.random.random() < p_accept:
+            x = x_new
+            accepted += 1
+
+        # Save sample after burn-in
+        if step >= burn_in:
+            samples.append(x)
+
+    acceptance_rate = accepted / n_steps
+    return samples, acceptance_rate
+
+
+def calculate_expectation(samples):
+    """
+    Calculate the expectation value <x>.
+
+    Parameters:
+        samples (list): Samples from the Metropolis algorithm.
+
+    Returns:
+        mean_x (float): Estimated expectation value <x>.
+    """
+    return np.mean(samples)
+
+
+def calculate_rms_error(samples, exact_value):
+    """
+    Calculate the RMS error compared to the exact value.
+
+    Parameters:
+        samples (list): Samples from the Metropolis algorithm.
+        exact_value (float): Exact value of the expectation.
+
+    Returns:
+        rms_error (float): Root Mean Square error.
+    """
+    return np.sqrt(np.mean((np.mean(samples) - exact_value) ** 2))
+
+
+# Main simulation parameters
+n_steps = 100000  # Total steps
+burn_in = 10000  # Burn-in steps
+delta_values = np.linspace(0.01, 10, 50)  # Range of delta
+exact_value = 1  # Exact expectation value of <x> for P(x) = exp(-x)
+
+# Storage for results
+standard_errors = []
+rms_errors = []
+acceptance_rates = []
+
+for delta in delta_values:
+    samples, acceptance_rate = metropolis(delta, n_steps, burn_in)
+    mean_x = calculate_expectation(samples)
+
+    # Standard error: std(x) / sqrt(N)
+    standard_error = np.std(samples) / np.sqrt(len(samples))
+    standard_errors.append(standard_error)
+
+    # RMS error
+    rms_error = calculate_rms_error(samples, exact_value)
+    rms_errors.append(rms_error)
+
+    # Store acceptance rate
+    acceptance_rates.append(acceptance_rate)
+
+# Plotting results
+plt.figure(figsize=(10, 6))
+
+# Standard error vs delta
+plt.subplot(2, 1, 1)
+plt.plot(delta_values, standard_errors, label='Standard Error')
+plt.plot(delta_values, rms_errors, label='RMS Error', linestyle='--')
+plt.xlabel('Delta')
+plt.ylabel('Error')
+plt.legend()
+plt.title('Error vs Delta')
+
+# Acceptance rate vs delta
+plt.subplot(2, 1, 2)
+plt.plot(delta_values, acceptance_rates, label='Acceptance Rate', color='green')
+plt.xlabel('Delta')
+plt.ylabel('Acceptance Rate')
+plt.legend()
+plt.title('Acceptance Rate vs Delta')
+
+plt.tight_layout()
+plt.show()
