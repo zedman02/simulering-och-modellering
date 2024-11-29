@@ -292,23 +292,23 @@ def exercise_32c(T1, T2, dt, nsteps):
     MD1.plot_energy(title=f"Energies at T={T1}, dt={dt}")
     MD2.plot_energy(title=f"Energies at T={T2}, dt={dt}")
 
-def plot_d(skip=100):
+def plot_d():
     """
     Calculate and plot the average energy and heat capacity as a function of temperature.
     """
-    temperatures = np.linspace(0.2, 1.0,)  # Temperatures from 0.2 to 1.0 in 9 steps
+    temperatures = np.linspace(0.2, 1.0,9)  # Temperatures from 0.2 to 1.0 in 9 steps
     avg_energies = []
     heat_capacities = []
 
     for T in temperatures:
         print(f"Running simulation at T={T}...")
-        MD = MDsimulator(T=T, dt=0.01, nsteps=30000, startStepForAveraging=10000)
+        MD = MDsimulator(T=T, dt=0.01, nsteps=30000, startStepForAveraging=100)
         MD.simulate()
 
         # Compute averages
-        avg_Etot = np.mean(MD.etotList[MD.startStepForAveraging // skip:])
-        avg_Etot2 = np.mean(np.square(MD.etotList[MD.startStepForAveraging // skip:]))
-        Cv = MD.Cv
+        avg_Etot = np.mean(MD.etotList[MD.startStepForAveraging:])
+        avg_Etot2 = np.mean(np.square(MD.etotList[MD.startStepForAveraging:]))
+        Cv = (avg_Etot2 - avg_Etot**2) / (kB * T**2)
 
         avg_energies.append(avg_Etot)
         heat_capacities.append(Cv)
@@ -323,13 +323,94 @@ def plot_d(skip=100):
     plt.legend()
     plt.show()
 
+def plot_e(skip=100):
+    """
+    Calculate and plot the pressure as a function of temperature for different box sizes.
+    Compare with the ideal gas law.
+    """
+    temperatures = np.linspace(0.2, 1.0, 9)  # Temperatures from 0.2 to 1.0 in 9 steps
+    pressures_original = []
+    pressures_large = []
+    pressures_ideal_original = []
+    pressures_ideal_large = []
+
+    # Original box size
+    for T in temperatures:
+        print(f"Running simulation at T={T} for original box size")
+        MD = MDsimulator(T=T, dt=0.01, nsteps=30000, startStepForAveraging=100)
+        MD.simulate()
+
+        # Calculate pressure
+        EkinAv = np.mean(MD.ekinList[MD.startStepForAveraging:])
+        VirialAv = MD.sumVirial / (MD.step + 1 - MD.startStepForAveraging)
+        P = (2.0 / MD.area) * EkinAv - (1.0 / MD.area) * VirialAv
+        pressures_original.append(P)
+
+        # Ideal gas pressure
+        P_ideal = (MD.n * kB * T) / MD.area
+        pressures_ideal_original.append(P_ideal)
+
+    original_box = (MD.Lx, MD.Ly)
+
+    # Enlarged box size
+    for T in temperatures:
+        print(f"Running simulation at T={T} for large box size")
+        MD = MDsimulator(T=T, dt=0.01, nsteps=30000, startStepForAveraging=100)
+        MD.Lx *= 2  # Double the box length
+        MD.Ly *= 2
+        MD.area = MD.Lx * MD.Ly
+        MD.simulate()
+
+        # Calculate pressure
+        EkinAv = np.mean(MD.ekinList[MD.startStepForAveraging:])
+        VirialAv = MD.sumVirial / (MD.step + 1 - MD.startStepForAveraging)
+        P = (2.0 / MD.area) * EkinAv - (1.0 / MD.area) * VirialAv
+        pressures_large.append(P)
+
+        # Ideal gas pressure
+        P_ideal = (MD.n * kB * T) / MD.area
+        pressures_ideal_large.append(P_ideal)
+
+    large_box = (MD.Lx, MD.Ly)
+
+    # Plot pressure vs temperature for original and large box
+    plt.figure()
+    plt.plot(temperatures, pressures_original, 'o-', label=f"Simulated Pressure (Original Box {original_box[0]:.2f}x{original_box[1]:.2f})")
+    plt.plot(temperatures, pressures_large, 's-', label=f"Simulated Pressure (Large Box {large_box[0]:.2f}x{large_box[1]:.2f})")
+    plt.xlabel("Temperature (T)")
+    plt.ylabel("Pressure (P)")
+    plt.title("Pressure vs Temperature (Simulated)")
+    plt.legend()
+    plt.show()
+
+    # Compare simulated pressure and ideal gas for original box
+    plt.figure()
+    plt.plot(temperatures, pressures_original, 'o-', label="Simulated Pressure")
+    plt.plot(temperatures, pressures_ideal_original, '--', label="Ideal Gas Pressure")
+    plt.xlabel("Temperature (T)")
+    plt.ylabel("Pressure (P)")
+    plt.title(f"Pressure vs Temperature (Original Box {original_box[0]:.2f}x{original_box[1]:.2f})")
+    plt.legend()
+    plt.show()
+
+    # Compare simulated pressure and ideal gas for large box
+    plt.figure()
+    plt.plot(temperatures, pressures_large, 's-', label="Simulated Pressure (Large Box)")
+    plt.plot(temperatures, pressures_ideal_large, '--', label="Ideal Gas Pressure")
+    plt.xlabel("Temperature (T)")
+    plt.ylabel("Pressure (P)")
+    plt.title(f"Pressure vs Temperature (Large Box {large_box[0]:.2f}x{large_box[1]:.2f})")
+    plt.legend()
+    plt.show()
+
+    print("Pressure plots generated successfully.")
 
 # Calling 'main()' if the script is executed.
 # If the script is instead just imported, main is not called (this can be useful if you want to
 # write another script importing and utilizing the functions and classes defined in this one)
 if __name__ == "__main__":
     #exercise_32c(1, 0.2, 0.01, 60000)
-    plot_d(50)
+    plot_e()
 
     #MD = MDsimulator(T=1, dt=0.01, nsteps=30000)
    #MD.simulate_animate()
