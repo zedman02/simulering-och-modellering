@@ -40,50 +40,50 @@ N_STEPS_THERMO = 10
 # Lower (increase) this if the size of the disc is too large (small) when running run_animate()
 DISK_SIZE = 750
 
-
 class MDsimulator:
+
     """
         This class encapsulates the whole MD simulation algorithm
     """
 
-    def __init__(self,
-                 n=48,
-                 mass=1.0,
-                 numPerRow=8,
-                 initial_spacing=1.12,
-                 T=1,  # temp
-                 dt=0.01,
-                 nsteps=20000,
-                 numStepsPerFrame=100,
-                 startStepForAveraging=100
-                 ):
-
+    def __init__(self, 
+        n = 48, 
+        mass = 1.0, 
+        numPerRow = 8, 
+        initial_spacing = 1.12,
+        T = 0.4, 
+        dt = 0.01, 
+        nsteps = 20000, 
+        numStepsPerFrame = 100,
+        startStepForAveraging = 100
+        ):
+        
         """
-            This is the class 'constructor'; if you want to try different simulations with different parameters
-            (e.g. temperature, initial particle spacing) in the same scrip, allocate another simulator by passing
+            This is the class 'constructor'; if you want to try different simulations with different parameters 
+            (e.g. temperature, initial particle spacing) in the same scrip, allocate another simulator by passing 
             a different value as input argument. See the examples at the end of the script.
         """
 
         # Initialize simulation parameters and box
         self.n = n
         self.mass = 1.0
-        self.invmass = 1.0 / mass
+        self.invmass = 1.0/mass
         self.numPerRow = numPerRow
-        self.Lx = numPerRow * initial_spacing
-        self.Ly = numPerRow * initial_spacing
-        self.area = self.Lx * self.Ly
+        self.Lx = numPerRow*initial_spacing
+        self.Ly = numPerRow*initial_spacing
+        self.area = self.Lx*self.Ly
         self.T = T
-        self.kBT = kB * T
+        self.kBT = kB*T
         self.dt = dt
         self.nsteps = nsteps
         self.numStepsPerFrame = numStepsPerFrame
         # Initialize positions, velocities and forces
         self.x = []
         self.y = []
-        for i in range(n):
-            self.x.append(self.Lx * 0.95 / numPerRow * ((i % numPerRow) + 0.5 * (i / numPerRow)))
-            self.y.append(self.Lx * 0.95 / numPerRow * 0.87 * (i / numPerRow))
-
+        for i in range (n):
+            self.x.append(self.Lx*0.95/numPerRow*((i % numPerRow) + 0.5*(i/numPerRow)))
+            self.y.append(self.Lx*0.95/numPerRow*0.87*(i/numPerRow))
+        
         # Numba likes numpy arrays much more than list
         # Numpy arrays are mutable, so can be passed 'by reference' to quick_force_calculation
         self.x = np.array(self.x)
@@ -94,7 +94,7 @@ class MDsimulator:
         self.fy = np.zeros(n, dtype=float)
 
         # Initialize particles' velocity according to the initial temperature
-        md.thermalize(self.vx, self.vy, np.sqrt(self.kBT / self.mass))
+        md.thermalize(self.vx, self.vy, np.sqrt(self.kBT/self.mass))
         # Initialize containers for energies
         self.sumEkin = 0
         self.sumEpot = 0
@@ -113,13 +113,13 @@ class MDsimulator:
         self.Cv = 0
         self.P = 0
 
-    def clear_energy_potential(self):
-
+    def clear_energy_potential(self) :
+        
         """
             Clear the temporary variables storing potential and kinetic energy
             Resets forces to zero
         """
-
+        
         self.Epot = 0
         self.Ekin = 0
         self.Virial = 0
@@ -127,45 +127,55 @@ class MDsimulator:
             self.fx[i] = 0
             self.fy[i] = 0
 
-    def update_forces(self):
+    def update_forces(self) :
 
         """
             Updates forces and potential energy using functions
             pairEnergy and pairForce (which you coded above...)
         """
-
-        tEpot, tVirial = md.quick_force_calculation(self.x, self.y, self.fx, self.fy,
-                                                    self.Lx, self.Ly, self.n)
+        
+        tEpot, tVirial = md.quick_force_calculation(self.x, self.y, self.fx, self.fy, 
+            self.Lx, self.Ly, self.n)
         self.Epot += tEpot
         self.Virial += tVirial
+    
+    def propagate(self) :
 
-    def propagate(self):
         """
-        Performs an Hamiltonian propagation step and applies the Andersen thermostat
-        at regular intervals to thermalize all particles.
+            Performs an Hamiltonian propagation step and
+            rescales velocities to match the input temperature 
+            (THE LATTER YOU NEED TO IMPLEMENT!)
         """
-        for i in range(0, self.n):
-            # Update the velocities with a half step
-            if self.step > 0:
-                self.vx[i] += self.fx[i] * self.invmass * 0.5 * self.dt
-                self.vy[i] += self.fy[i] * self.invmass * 0.5 * self.dt
 
-            # Add the kinetic energy of particle i to the total
-            self.Ekin += 0.5 * self.mass * (self.vx[i] ** 2 + self.vy[i] ** 2)
-
-            # Update the positions
-            self.x[i] += self.vx[i] * self.dt
-            self.y[i] += self.vy[i] * self.dt
-
-            # Apply periodic boundary conditions
-            self.x[i] = self.x[i] % self.Lx
-            self.y[i] = self.y[i] % self.Ly
+        # TODO
+        # When using a thermostat, modify the velocities of all particles here.
+        # Note that you can use thermalize() from md_force_calculator.py.
 
         # Andersen thermostat: thermalize all particles at fixed intervals
         if self.step % N_STEPS_THERMO == 0:
             md.thermalize(self.vx, self.vy, np.sqrt(self.kBT / self.mass))
 
-    def md_step(self):
+        for i in range(0,self.n):
+            # At the first step we alread have the "full step" velocity
+            if self.step > 0:
+                # Update the velocities with a half step
+                self.vx[i] += self.fx[i]*self.invmass*0.5*self.dt
+                self.vy[i] += self.fy[i]*self.invmass*0.5*self.dt
+
+            # Add the kinetic energy of particle i to the total
+            self.Ekin += 0.5*self.mass*(self.vx[i]*self.vx[i] + self.vy[i]*self.vy[i])
+            # Update the velocities with a half step
+            self.vx[i] += self.fx[i]*self.invmass*0.5*self.dt
+            self.vy[i] += self.fy[i]*self.invmass*0.5*self.dt
+            # Update the coordinates
+            self.x[i] += self.vx[i] * self.dt
+            self.y[i] += self.vy[i] * self.dt
+            # Apply p.c.b. and put particles back in the unit cell
+            self.x[i] = self.x[i] % self.Lx
+            self.y[i] = self.y[i] % self.Ly
+
+
+    def md_step(self) :
 
         """
             Performs a full MD step
@@ -175,44 +185,43 @@ class MDsimulator:
         # This function performs one MD integration step
         self.clear_energy_potential()
         self.update_forces()
+        
+        self.propagate()
+        
         # Start averaging only after some initial spin-up time
         if self.step > self.startStepForAveraging:
             self.sumVirial += self.Virial
-            self.sumEpot += self.Epot
-            self.sumEtot += self.Epot + self.Ekin
-            self.sumEtot2 += (self.Epot + self.Ekin) * (self.Epot + self.Ekin)
-
-        self.propagate()
-
-        if self.step > self.startStepForAveraging:
-            self.sumEkin += self.Ekin
-
+            self.sumEpot   += self.Epot
+            self.sumEkin   += self.Ekin
+            self.sumEtot   += self.Epot + self.Ekin
+            self.sumEtot2  += (self.Epot + self.Ekin)*(self.Epot + self.Ekin)
+        
         self.step += 1
 
-    def integrate_some_steps(self, framenr=None):
+    def integrate_some_steps(self, framenr=None) :
 
         """
             Performs MD steps in a prescribed time window
             Stores energies and heat capacity
         """
 
-        for j in range(self.numStepsPerFrame):
+        for j in range(self.numStepsPerFrame) :
             self.md_step()
-        t = self.step * self.dt
+        t = self.step*self.dt
         self.outt.append(t)
         self.ekinList.append(self.Ekin)
         self.epotList.append(self.Epot)
         self.etotList.append(self.Epot + self.Ekin)
         if self.step >= self.startStepForAveraging and self.step % N_OUTPUT_HEAT_CAP == 0:
-            EkinAv = self.sumEkin / (self.step + 1 - self.startStepForAveraging)
-            EtotAv = self.sumEtot / (self.step + 1 - self.startStepForAveraging)
-            Etot2Av = self.sumEtot2 / (self.step + 1 - self.startStepForAveraging)
-            VirialAV = self.sumVirial / (self.step + 1 - self.startStepForAveraging)
+            EkinAv  = self.sumEkin/(self.step + 1 - self.startStepForAveraging)
+            EtotAv = self.sumEtot/(self.step + 1 - self.startStepForAveraging)
+            Etot2Av = self.sumEtot2/(self.step + 1 - self.startStepForAveraging)
+            VirialAV = self.sumVirial/(self.step + 1 - self.startStepForAveraging)
             self.Cv = (Etot2Av - EtotAv * EtotAv) / (self.kBT * self.T)
-            self.P = (2.0 / self.area) * (EkinAv - VirialAV)
+            self.P = (2.0/self.area)*(EkinAv - VirialAV)
             print('time', t, 'Cv =', self.Cv, 'P = ', self.P)
 
-    def snapshot(self, framenr=None):
+    def snapshot(self, framenr=None) :
 
         """
             This is an 'auxillary' function needed by animation.FuncAnimation
@@ -222,7 +231,7 @@ class MDsimulator:
         self.integrate_some_steps(framenr)
         return self.ax.scatter(self.x, self.y, s=DISK_SIZE, marker='o', c="r"),
 
-    def simulate(self):
+    def simulate(self) :
 
         """
             Performs the whole MD simulation
@@ -230,12 +239,12 @@ class MDsimulator:
             the simulation will undergo nsteps-(nsteps%numStepsPerFrame) steps
         """
 
-        nn = self.nsteps // self.numStepsPerFrame
-        # print("Integrating for "+str(nn*self.numStepsPerFrame)+" steps...")
-        for i in range(nn):
+        nn = self.nsteps//self.numStepsPerFrame
+        print("Integrating for "+str(nn*self.numStepsPerFrame)+" steps...")
+        for i in range(nn) :
             self.integrate_some_steps()
 
-    def simulate_animate(self):
+    def simulate_animate(self) :
 
         """
             Performs the whole MD simulation, while producing and showing the
@@ -246,28 +255,28 @@ class MDsimulator:
         self.fig = plt.figure()
         self.ax = plt.subplot(xlim=(0, self.Lx), ylim=(0, self.Ly))
 
-        nn = self.nsteps // self.numStepsPerFrame
-        print("Integrating for " + str(nn * self.numStepsPerFrame) + " steps...")
+        nn = self.nsteps//self.numStepsPerFrame
+        print("Integrating for "+str(nn*self.numStepsPerFrame)+" steps...") 
         self.anim = animation.FuncAnimation(self.fig, self.snapshot,
-                                            frames=nn, interval=50, blit=True, repeat=False)
+            frames=nn, interval=50, blit=True, repeat=False)
         plt.axis('square')
         plt.show()  # show the animation
         # You may want to (un)comment the following 'waitforbuttonpress', depending on your environment
         # plt.waitforbuttonpress(timeout=20)
 
-    def plot_energy(self, title):
-
+    def plot_energy(self, title="energies") :
+        
         """
             Plots kinetic, potential and total energy over time
         """
-
+        
         plt.figure()
         plt.xlabel('time')
         plt.ylabel('energy')
         plt.title(title)
         plt.plot(self.outt, self.ekinList, self.outt, self.epotList, self.outt, self.etotList)
-        plt.legend(('Ekin', 'Epot', 'Etot'))
-        # plt.savefig(title + ".pdf")
+        plt.legend( ('Ekin','Epot','Etot') )
+        #plt.savefig(title + ".pdf")
         plt.show()
 
 
@@ -275,16 +284,17 @@ def exercise_32c(T1, T2, dt, nsteps):
     print(f"Running simulation at T={T1}...")
     MD1 = MDsimulator(T=T1, dt=dt, nsteps=nsteps)
     MD1.simulate()
-    MD1.plot_energy(title=f"Energies at T={T1}, dt={dt}")
+    #MD1.plot_energy(title=f"Energies at T={T1}, dt={dt} with thermostat")
+    MD1.simulate_animate()
 
     print(f"Running simulation at T={T2}...")
     MD2 = MDsimulator(T=T2, dt=dt, nsteps=nsteps)
     MD2.simulate()
-    MD2.plot_energy(title=f"Energies at T={T2}, dt={dt}")
-
+    MD2.plot_energy(title=f"Energies at T={T2}, dt={dt} with thermostat")
+    #MD2.simulate_animate()
 
 # Calling 'main()' if the script is executed.
 # If the script is instead just imported, main is not called (this can be useful if you want to
 # write another script importing and utilizing the functions and classes defined in this one)
 if __name__ == "__main__":
-    exercise_32c(1, 0.2, 0.05, 20000)
+    exercise_32c(0.001, 0.2, 0.001, 100000)
