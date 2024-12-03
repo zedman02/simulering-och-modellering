@@ -1,0 +1,169 @@
+import numpy as np
+import random
+import matplotlib.pyplot as plt
+
+def random_walk_a(steps):
+    # Starting position
+    x, y = 0, 0
+    x_positions = [x]
+    y_positions = [y]
+
+    # Generate the random walk
+    for _ in range(steps):
+        direction = int(random.random() * 4)  # Randomly pick a direction (0, 1, 2, or 3)
+        if direction == 0:
+            x += 1  # Move right
+        elif direction == 1:
+            x -= 1  # Move left
+        elif direction == 2:
+            y += 1  # Move up
+        elif direction == 3:
+            y -= 1  # Move down
+        x_positions.append(x)
+        y_positions.append(y)
+    
+    return x_positions, y_positions
+
+def avoiding_walk_2D(N, max_attempts):
+    success_count = 0
+    total_attempts = 0
+
+    while total_attempts < max_attempts:
+        walk = [(0, 0)]
+        visited = set(walk)
+        success = True
+
+        for _ in range(N):
+            x, y = walk[-1]
+            possible_moves = [(x+1, y), (x-1, y), (x, y+1), (x, y-1)]
+            #moves = [move for move in possible_moves if move not in visited]
+            next_move = random.choice(possible_moves)
+
+            if next_move in visited:
+                success = False
+                break
+            else:
+                walk.append(next_move)
+                visited.add(next_move)
+
+        if success:
+            success_count += 1
+        total_attempts += 1
+
+    return success_count / max_attempts, walk
+
+def avoiding_walk_back_2D(N, max_attempts):
+    success_count = 0  # Count successful walks
+    total_attempts = 0  # Total attempts
+    
+    # Loop until we reach max_attempts or a target precision
+    while total_attempts < max_attempts:
+        # Initialize the walk
+        walk = [(0, 0)]  # Starting point at the origin
+        visited = set(walk)
+        success = True  # Flag to determine if the walk is successful
+
+        for step in range(N):
+            x, y = walk[-1]  # Current position
+
+            # Generate possible moves (without going back)
+            possible_moves = [(x+1, y), (x-1, y), (x, y+1), (x, y-1)]
+            # Remove the move that would lead to the previous step (backtrack)
+            if len(walk) > 1:
+                last_x, last_y = walk[-2]
+                backtrack_move = (last_x, last_y)
+                possible_moves.remove(backtrack_move)
+
+            # Filter out moves that revisit a visited site
+            next_move = possible_moves[int(random.random() * 3)]
+
+            if next_move in visited:
+                success = False
+                break
+            else:
+                walk.append(next_move)
+                visited.add(next_move)
+
+        # Count success
+        if success:
+            success_count += 1
+        total_attempts += 1
+
+    # Fraction of successful walks
+    return success_count / max_attempts, walk
+
+def plot_the_probability(N, attempts):
+    prob1_list = []
+    prob2_list = []
+    x_axis = np.arange(1, N+1, 1)
+
+    for m in range(1, N+1):
+        prob1, _ = avoiding_walk_2D(m, attempts)
+        prob2, _ = avoiding_walk_back_2D(m, attempts)
+        prob1_list.append(prob1)
+        prob2_list.append(prob2)
+
+    plt.plot(x_axis, prob1_list, label="No Backtracking Avoidance", marker='o')
+    plt.plot(x_axis, prob2_list, label="With Backtracking Avoidance", marker='o')
+    plt.title("Success Rate of Self-Avoiding Random Walks")
+    plt.xlabel("Number of Steps (N)")
+    plt.ylabel("Success Rate")
+    plt.legend()
+    plt.grid(True)
+    plt.show()
+
+def rmsf(num_walks, step_counts, function):
+    rms_distances = []
+
+    if function == random_walk_a:
+        for steps in step_counts:
+            squared_distances = []
+
+            for _ in range(num_walks):
+                x, y = random_walk_a(steps)
+                x_final, y_final = x[-1], y[-1]
+                distance = np.sqrt(x_final**2 + y_final**2)  # End-to-end distance
+                squared_distances.append(distance**2)
+
+            mean_squared_distance = np.mean(squared_distances)
+
+            rms_distance = np.sqrt(mean_squared_distance)  # RMS distance
+            rms_distances.append(rms_distance)
+    else:
+        for steps in step_counts:
+            squared_distances = []
+
+            for _ in range(num_walks):
+                _, walk = function(steps, num_walks)
+                x_final, y_final = walk[-1]
+                distance = np.sqrt(x_final**2 + y_final**2)
+                squared_distances.append(distance**2)
+
+            mean_squared_distance = np.mean(squared_distances)
+            rms_distance = np.sqrt(mean_squared_distance)
+            rms_distances.append(rms_distance)
+
+    return step_counts, rms_distances
+
+def plot_c():
+    num_walks = 100
+    step_counts = list(range(1, 61))
+
+    steps_1, rms_distances_1 = rmsf(num_walks, step_counts, avoiding_walk_2D)
+    steps_2, rms_distances_2 = rmsf(num_walks, step_counts, avoiding_walk_back_2D)
+    steps_3, rms_distances_3 = rmsf(num_walks, step_counts, random_walk_a)
+
+    plt.figure(figsize=(12, 6))
+    plt.loglog(steps_1, rms_distances_1, label="Self-Avoiding", marker='o')
+    plt.loglog(steps_2, rms_distances_2, label="Self-Avoiding in Three Directions", marker='o')
+    plt.loglog(steps_3, rms_distances_3, label="Normal Random Walk", marker='o')
+    plt.title("RMS vs Steps for Random Walks")
+    plt.xlabel("Number of Steps")
+    plt.ylabel("Distance")
+    plt.legend()
+    plt.grid(True)
+    plt.show()
+
+# Run simulations and plots
+plot_the_probability(60, 100)
+plot_c()
