@@ -15,8 +15,6 @@ def random_walk(grid, start_x, start_y):
             y -= 1
         elif step == "right":
             y += 1
-
-    # Return the boundary value where the walker ends up
     return grid[x, y]
 
 # Function to estimate the potential at a point using random walks
@@ -24,7 +22,7 @@ def estimate_potential(grid, start_x, start_y, num_walks):
     boundary_values = [random_walk(grid, start_x, start_y) for _ in range(num_walks)]
     return np.mean(boundary_values)
 
-# Initialize the grid with the specified boundary conditions
+# Initialize the grid with asymmetric boundary conditions
 def initialize_asymmetric_boundaries(n):
     """
     Initialize the grid with specific boundary conditions:
@@ -32,8 +30,8 @@ def initialize_asymmetric_boundaries(n):
     - Left and right sides: 5V
     """
     grid = np.zeros((n + 2, n + 2))  # Include boundary points
-    grid[0, :] = 10  # Bottom boundary
-    grid[-1, :] = 10  # Top boundary
+    grid[0, :] = 10  # Top boundary
+    grid[-1, :] = 10  # Bottom boundary
     grid[:, 0] = 5   # Left boundary
     grid[:, -1] = 5  # Right boundary
     return grid
@@ -47,10 +45,21 @@ def random_walk_solution(grid, num_walks):
             potential[i, j] = estimate_potential(grid, i, j, num_walks)
     return potential
 
-# Plotting function
-def plot_potential(potential, title):
+# Plotting function that includes boundary values
+def plot_potential_with_boundaries(grid, potential, title):
+    """
+    Plot the potential with boundary values explicitly included.
+    """
+    # Combine the computed potential with the fixed boundary values
+    combined_grid = potential.copy()
+    combined_grid[0, :] = grid[0, :]  # Top boundary
+    combined_grid[-1, :] = grid[-1, :]  # Bottom boundary
+    combined_grid[:, 0] = grid[:, 0]  # Left boundary
+    combined_grid[:, -1] = grid[:, -1]  # Right boundary
+
+    # Plot the combined grid
     plt.figure(figsize=(8, 6))
-    plt.contourf(potential, levels=20, cmap='viridis')
+    plt.contourf(combined_grid, levels=20, cmap='viridis')
     plt.colorbar(label="Potential (V)")
     plt.title(title)
     plt.xlabel("X")
@@ -59,20 +68,24 @@ def plot_potential(potential, title):
 
 # Main simulation
 if __name__ == "__main__":
-    # Grid size for testing
+    # Grid size and boundary conditions
     grid_size = 9
-
-    # Initialize the grid with asymmetric boundary conditions
     asymmetric_grid = initialize_asymmetric_boundaries(grid_size)
 
-    # Simulate random walks for n = 100
-    num_walks_100 = 100
-    potential_asymmetric_100 = random_walk_solution(asymmetric_grid, num_walks_100)
+    # Verify boundary values (optional debug step)
+    print("Top boundary:", asymmetric_grid[0, :])
+    print("Bottom boundary:", asymmetric_grid[-1, :])
+    print("Left boundary:", asymmetric_grid[:, 0])
+    print("Right boundary:", asymmetric_grid[:, -1])
 
-    # Simulate random walks for n = 1000
+    # Simulate random walks
+    num_walks_100 = 100  # Adjust for faster computation
     num_walks_1000 = 1000
-    potential_asymmetric_1000 = random_walk_solution(asymmetric_grid, num_walks_1000)
 
-    # Plot the results
-    plot_potential(potential_asymmetric_100, title="Asymmetric Boundaries (n=100 Random Walks)")
-    plot_potential(potential_asymmetric_1000, title="Asymmetric Boundaries (n=1000 Random Walks)")
+    potential_asymmetric = random_walk_solution(asymmetric_grid, num_walks_100)
+    potential_asymmetric = random_walk_solution(asymmetric_grid, num_walks_1000)
+
+    # Plot potential with boundary values included
+    plot_potential_with_boundaries(asymmetric_grid, potential_asymmetric,
+                                   title="Potential Distribution with Explicit Boundary Values (n=100 Random Walks)")
+    plot_potential_with_boundaries(asymmetric_grid, potential_asymmetric, title="Potential Distribution with Explicit Boundary Values (n=1000 Random Walks)")
