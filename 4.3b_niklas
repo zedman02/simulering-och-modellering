@@ -1,0 +1,137 @@
+import numpy as np
+import matplotlib.pyplot as plt
+
+
+# Function to perform a random walk starting at (x, y) until it hits the boundary
+def random_walk(grid, start_x, start_y):
+    x, y = start_x, start_y
+    n, m = grid.shape
+    while 0 < x < n - 1 and 0 < y < m - 1:  # Stay within the interior of the grid
+        step = np.random.choice(["up", "down", "left", "right"])
+        if step == "up":
+            x -= 1
+        elif step == "down":
+            x += 1
+        elif step == "left":
+            y -= 1
+        elif step == "right":
+            y += 1
+    return grid[x, y]
+
+
+# Function to estimate the potential at a point using random walks
+def estimate_potential(grid, start_x, start_y, num_walks):
+    boundary_values = [random_walk(grid, start_x, start_y) for _ in range(num_walks)]
+    return np.mean(boundary_values)
+
+
+# Initialize the grid with asymmetric boundary conditions
+def initialize_asymmetric_boundaries(n):
+    """
+    Initialize the grid with specific boundary conditions:
+    - Top and bottom sides: 10V
+    - Left and right sides: 5V
+    """
+    grid = np.zeros((n + 2, n + 2))  # Include boundary points
+    grid[0, :] = 10  # Top boundary
+    grid[-1, :] = 10  # Bottom boundary
+    grid[:, 0] = 5  # Left boundary
+    grid[:, -1] = 5  # Right boundary
+    return grid
+
+
+# Function to estimate the potential for all interior points using random walks
+def random_walk_solution(grid, num_walks):
+    n, m = grid.shape
+    potential = np.zeros_like(grid)
+    for i in range(1, n - 1):
+        for j in range(1, m - 1):
+            potential[i, j] = estimate_potential(grid, i, j, num_walks)
+    return potential
+
+
+# Function to calculate the mean squared error (MSE) between successive estimates
+def calculate_convergence(grid, num_walks_list):
+    """
+    Calculates how quickly the solution converges by measuring the change in potential
+    estimates as a function of the number of random walks.
+    """
+    convergence_data = []  # Store number of walks and corresponding error
+    previous_potential = np.zeros_like(grid)  # Initial potential estimate
+
+    for num_walks in num_walks_list:
+        # Estimate potential with the current number of walks
+        current_potential = random_walk_solution(grid, num_walks)
+
+        # Calculate the mean squared difference (error) between successive potentials
+        mse = np.mean((current_potential - previous_potential) ** 2)
+        convergence_data.append((num_walks, mse))
+
+        # Update previous potential for next comparison
+        previous_potential = current_potential.copy()
+
+    return convergence_data
+
+
+# Plotting function that includes boundary values
+def plot_potential_with_boundaries(grid, potential, title):
+    """
+    Plot the potential with boundary values explicitly included.
+    """
+    # Combine the computed potential with the fixed boundary values
+    combined_grid = potential.copy()
+    combined_grid[0, :] = grid[0, :]  # Top boundary
+    combined_grid[-1, :] = grid[-1, :]  # Bottom boundary
+    combined_grid[:, 0] = grid[:, 0]  # Left boundary
+    combined_grid[:, -1] = grid[:, -1]  # Right boundary
+
+    # Plot the combined grid
+    plt.figure(figsize=(8, 6))
+    plt.contourf(combined_grid, levels=20, cmap='viridis')
+    plt.colorbar(label="Potential (V)")
+    plt.title(title)
+    plt.xlabel("X")
+    plt.ylabel("Y")
+    plt.show()
+
+
+# Plot convergence
+def plot_convergence(num_walks_values, mse_values):
+    plt.figure(figsize=(8, 6))
+    plt.plot(num_walks_values, mse_values, marker='o', linestyle='-', label="Convergence Rate")
+    plt.title("Convergence of Potential Estimate as a Function of Random Walks")
+    plt.xlabel("Number of Random Walks (n)")
+    plt.ylabel("Mean Squared Error (MSE)")
+    plt.xscale("log")  # Logarithmic scale for better visualization
+    plt.yscale("log")
+    plt.grid(True, which="both", linestyle="--", linewidth=0.5)
+    plt.legend()
+    plt.show()
+
+
+# Main simulation
+if __name__ == "__main__":
+    # Grid size and boundary conditions
+    grid_size = 9
+    asymmetric_grid = initialize_asymmetric_boundaries(grid_size)
+
+    # Verify boundary values (optional debug step)
+    print("Top boundary:", asymmetric_grid[0, :])
+    print("Bottom boundary:", asymmetric_grid[-1, :])
+    print("Left boundary:", asymmetric_grid[:, 0])
+    print("Right boundary:", asymmetric_grid[:, -1])
+
+    # Simulate random walks
+    num_walks_list = [10, 50, 100, 200, 500, 1000]  # Increasing numbers of random walks
+    convergence_data = calculate_convergence(asymmetric_grid, num_walks_list)
+
+    # Extract data for convergence plot
+    num_walks_values, mse_values = zip(*convergence_data)
+
+    # Plot the convergence
+    plot_convergence(num_walks_values, mse_values)
+
+    # Compute final potential with 100 random walks and plot with boundaries
+    final_potential = random_walk_solution(asymmetric_grid, num_walks=100)
+    plot_potential_with_boundaries(asymmetric_grid, final_potential,
+                                   title="Potential Distribution with Random Walk (n=100)")
