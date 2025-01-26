@@ -1,0 +1,220 @@
+import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.animation import FuncAnimation
+
+class Planet:
+    AU = 149.6e6 * 1000  # 1 Astronomical Unit in meters
+    G = 6.67428e-11  # Gravitational constant
+    TIMESTEP = 3600 * 24  # 1 day in seconds
+
+    def __init__(self, name, semi_major_axis, eccentricity, radius, color, mass):
+        self.name = name
+        self.a = semi_major_axis  # Semi-major axis
+        self.e = eccentricity  # Eccentricity
+        self.radius = radius
+        self.color = color
+        self.mass = mass
+
+        if self.a == 0:
+            self.x = 0
+            self.y = 0
+            self.x_vel = 0
+            self.y_vel = 0
+        else:
+            self.x = self.a * (1 - self.e)
+            self.y = 0
+            sun_mass = 1.98892 * 10 ** 30
+            self.y_vel = np.sqrt(self.G * sun_mass * (2 / self.x - 1 / self.a))
+            self.x_vel = 0
+
+        self.orbit = []
+        self.sun = (self.a == 0)
+
+        self.previous_x = self.x - self.x_vel * self.TIMESTEP
+        self.previous_y = self.y - self.y_vel * self.TIMESTEP
+
+    def attraction(self, other):
+        other_x, other_y = other.x, other.y
+        distance_x = other_x - self.x
+        distance_y = other_y - self.y
+        distance = np.sqrt(distance_x ** 2 + distance_y ** 2)
+
+        force = self.G * self.mass * other.mass / distance ** 2
+        theta = np.arctan2(distance_y, distance_x)
+        force_x = np.cos(theta) * force
+        force_y = np.sin(theta) * force
+        return force_x, force_y
+
+    def update_position(self, planets):
+        total_fx = total_fy = 0
+        for planet in planets:
+            if self == planet:
+                continue
+
+            fx, fy = self.attraction(planet)
+            total_fx += fx
+            total_fy += fy
+
+        # Calculate acceleration
+        acceleration_x = total_fx / self.mass
+        acceleration_y = total_fy / self.mass
+
+        # For the first step, initialize previous position using velocity and acceleration
+        if not hasattr(self, "initialized"):
+            self.previous_x = self.x - self.x_vel * self.TIMESTEP + 0.5 * acceleration_x * self.TIMESTEP ** 2
+            self.previous_y = self.y - self.y_vel * self.TIMESTEP + 0.5 * acceleration_y * self.TIMESTEP ** 2
+            self.initialized = True
+
+        # Verlet position update
+        new_x = 2 * self.x - self.previous_x + acceleration_x * self.TIMESTEP ** 2
+        new_y = 2 * self.y - self.previous_y + acceleration_y * self.TIMESTEP ** 2
+
+        # Update previous position and current position
+        self.previous_x = self.x
+        self.previous_y = self.y
+        self.x = new_x
+        self.y = new_y
+
+        # Record the orbit
+        self.orbit.append((self.x, self.y))
+
+
+sun = Planet("Sun", 0, 0, 30, "yellow", 1.98892 * 10 ** 30)
+earth = Planet("Earth", 1 * Planet.AU, 0.0167, 5, "blue", 5.9742 * 10 ** 24)
+mars = Planet("Mars", 1.524 * Planet.AU, 0.0934, 4, "red", 6.39 * 10 ** 23)
+mercury = Planet("Mercury", 0.387 * Planet.AU, 0.205, 3, "darkgray", 3.30 * 10 ** 23)
+venus = Planet("Venus", 0.723 * Planet.AU, 0.0067, 4, "white", 4.8685 * 10 ** 24)
+star = Planet("Star", 1.1 * Planet.AU, 0.02, 5.1, "orange", 1.98892 * 10 ** 30)
+
+planets = [sun, earth, mars, mercury, venus]
+
+fig, ax = plt.subplots(figsize=(8, 8))
+ax.set_facecolor("black")
+ax.set_xlim(-2 * Planet.AU, 2 * Planet.AU)
+ax.set_ylim(-2 * Planet.AU, 2 * Planet.AU)
+
+scatters = []
+for planet in planets:
+    scatter = ax.plot([], [], marker="o", markersize=planet.radius, color=planet.color, label=planet.name)[0]
+    scatters.append(scatter)
+
+orbits = {planet.name: ax.plot([], [], lw=0.5, color=planet.color)[0] for planet in planets}
+
+def add_foreign_object(name, x, y, x_vel, y_vel, radius, color, mass):
+    """
+    Adds a foreign object (e.g., asteroid) to the solar system simulation.
+
+    Args:
+        name (str): Name of the object.
+        x (float): Initial x-coordinate (meters).
+        y (float): Initial y-coordinate (meters).
+        x_vel (float): Initial x-velocity (m/s).
+        y_vel (float): Initial y-velocity (m/s).
+        radius (float): Radius for visualization (arbitrary scale).
+        color (str): Color of the object for plotting.
+        mass (float): Mass of the object (kg).
+    """
+    asteroid = Planet(name, 0, 0, radius, color, mass)
+    asteroid.x = x
+    asteroid.y = y
+    asteroid.x_vel = x_vel
+    asteroid.y_vel = y_vel
+    asteroid.previous_x = x - x_vel * Planet.TIMESTEP
+    asteroid.previous_y = y - y_vel * Planet.TIMESTEP
+    asteroid.orbit = []
+
+    planets.append(asteroid)
+
+    # Add to the animation's scatter and orbit tracking
+    scatter = ax.plot([], [], marker="o", markersize=radius, color=color, label=name)[0]
+    scatters.append(scatter)
+    orbits[name] = ax.plot([], [], lw=0.5, color=color)[0]
+
+add_foreign_object(
+    name="Planet",
+    x=-3 * Planet.AU,      # Start far from the Sun, e.g., 3 AU
+    y=0,                  # Initial y-position
+    x_vel=25000 ,              # No x-velocity; heading directly toward the Sun
+    y_vel=-15000 ,         # Negative y-velocity (toward the Sun, 25 km/s)
+    radius=4,             # Small size for asteroid
+    color="purple",         # Gray for visualization
+    #mass = 5.9742 * 10 ** 24
+    mass= 1.89 * 10 ** 27           # jupiter mass
+)
+
+
+"""
+def plot_distances_to_sun(planets):
+
+   # Plots the RMS and Euclidean distance of all objects to the Sun over time.
+
+    #Args:
+    #    planets (list): List of Planet objects in the solar system.
+
+    # Find the Sun object
+    sun = next(planet for planet in planets if planet.name == "Sun")
+
+    # Initialize distance tracking
+    distances = {planet.name: [] for planet in planets if planet != sun}
+
+    # Iterate through each recorded orbit position to calculate distances
+    timesteps = len(sun.orbit)
+    for t in range(timesteps):
+        sun_x, sun_y = sun.orbit[t] if t < len(sun.orbit) else (sun.x, sun.y)
+
+        for planet in planets:
+            if planet == sun:
+                continue
+
+            planet_x, planet_y = (
+                planet.orbit[t] if t < len(planet.orbit) else (planet.x, planet.y)
+            )
+            distance = np.sqrt((planet_x - sun_x) ** 2 + (planet_y - sun_y) ** 2)
+            distances[planet.name].append(distance)
+
+    # Compute RMS distance for each object
+    time = np.arange(timesteps) * Planet.TIMESTEP / (3600 * 24)  # Convert time to days
+
+    # Plot distances to the Sun
+    plt.figure(figsize=(10, 6))
+    for planet_name, distance_list in distances.items():
+        plt.plot(time, distance_list, label=planet_name)
+
+    plt.title("Distance of Objects to the Sun")
+    plt.xlabel("Time (days)")
+    plt.ylabel("Distance (meters)")
+    plt.legend()
+    plt.grid(True)
+    plt.show()
+
+
+# Run the simulation to populate orbits
+
+for _ in range(365 * 2):  # Simulate 2 years
+    for planet in planets:
+        planet.update_position(planets)
+
+# Plot the distances
+#plot_distances_to_sun(planets)
+"""
+
+
+def update(frame):
+    for planet in planets:
+        planet.update_position(planets)
+
+    for scatter, planet in zip(scatters, planets):
+        scatter.set_data([planet.x], [planet.y])  # Wrap x and y in lists
+
+    for planet_name, line in orbits.items():
+        planet = next(p for p in planets if p.name == planet_name)
+        if len(planet.orbit) > 1:
+            orbit_x, orbit_y = zip(*planet.orbit)
+            line.set_data(orbit_x, orbit_y)
+
+    return scatters + list(orbits.values())
+
+
+ani = FuncAnimation(fig, update, frames=365 * 2, interval=20, blit=False)
+plt.legend(loc="upper right", fontsize="small")
+plt.show()
