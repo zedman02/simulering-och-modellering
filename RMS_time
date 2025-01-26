@@ -1,0 +1,216 @@
+import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.animation import FuncAnimation
+from scipy.interpolate import interp1d
+
+class Planet:
+    AU = 149.6e6 * 1000  # 1 Astronomical Unit in meters
+    G = 6.67428e-11  # Gravitational constant
+    TIMESTEP = 3600 * 24  # 1 day in seconds
+
+    def __init__(self, name, semi_major_axis, eccentricity, radius, color, mass):
+        self.name = name
+        self.a = semi_major_axis  # Semi-major axis
+        self.e = eccentricity  # Eccentricity
+        self.radius = radius
+        self.color = color
+        self.mass = mass
+
+        if self.a == 0:
+            self.x = 0
+            self.y = 0
+            self.x_vel = 0
+            self.y_vel = 0
+        else:
+            self.x = self.a * (1 - self.e)
+            self.y = 0
+            sun_mass = 1.98892 * 10 ** 30
+            self.y_vel = np.sqrt(self.G * sun_mass * (2 / self.x - 1 / self.a))
+            self.x_vel = 0
+
+        self.orbit = []
+        self.sun = (self.a == 0)
+
+        self.previous_x = self.x - self.x_vel * self.TIMESTEP
+        self.previous_y = self.y - self.y_vel * self.TIMESTEP
+
+    def attraction(self, other):
+        other_x, other_y = other.x, other.y
+        distance_x = other_x - self.x
+        distance_y = other_y - self.y
+        distance = np.sqrt(distance_x ** 2 + distance_y ** 2)
+
+        force = self.G * self.mass * other.mass / distance ** 2
+        theta = np.arctan2(distance_y, distance_x)
+        force_x = np.cos(theta) * force
+        force_y = np.sin(theta) * force
+        return force_x, force_y
+
+    def update_position(self, planets):
+        total_fx = total_fy = 0
+        for planet in planets:
+            if self == planet:
+                continue
+
+            fx, fy = self.attraction(planet)
+            total_fx += fx
+            total_fy += fy
+
+        # Calculate acceleration
+        acceleration_x = total_fx / self.mass
+        acceleration_y = total_fy / self.mass
+
+        # For the first step, initialize previous position using velocity and acceleration
+        if not hasattr(self, "initialized"):
+            self.previous_x = self.x - self.x_vel * self.TIMESTEP + 0.5 * acceleration_x * self.TIMESTEP ** 2
+            self.previous_y = self.y - self.y_vel * self.TIMESTEP + 0.5 * acceleration_y * self.TIMESTEP ** 2
+            self.initialized = True
+
+        # Verlet position update
+        new_x = 2 * self.x - self.previous_x + acceleration_x * self.TIMESTEP ** 2
+        new_y = 2 * self.y - self.previous_y + acceleration_y * self.TIMESTEP ** 2
+
+        # Update previous position and current position
+        self.previous_x = self.x
+        self.previous_y = self.y
+        self.x = new_x
+        self.y = new_y
+
+        # Record the orbit
+        self.orbit.append((self.x, self.y))
+
+
+sun = Planet("Sun", 0, 0, 30, "yellow", 1.98892 * 10 ** 30)
+earth = Planet("Earth", 1 * Planet.AU, 0.0167, 5, "blue", 5.9742 * 10 ** 24)
+mars = Planet("Mars", 1.524 * Planet.AU, 0.0934, 4, "red", 6.39 * 10 ** 23)
+mercury = Planet("Mercury", 0.387 * Planet.AU, 0.205, 3, "darkgray", 3.30 * 10 ** 23)
+venus = Planet("Venus", 0.723 * Planet.AU, 0.0067, 4, "white", 4.8685 * 10 ** 24)
+
+planets = [sun, earth, mars, mercury, venus]
+
+# Function to run the simulation and return the orbits
+
+def run_simulation(planets, timestep, simulation_steps):
+    """
+    Runs the solar system simulation for a given timestep.
+
+    Args:
+        planets (list): List of Planet objects.
+        timestep (float): Timestep in seconds.
+        simulation_steps (int): Number of simulation steps.
+
+    Returns:
+        dict: Dictionary containing the orbits of each planet.
+    """
+    # Backup original timestep
+    original_timestep = Planet.TIMESTEP
+
+    # Set the new timestep
+    Planet.TIMESTEP = timestep
+
+    # Reset planet positions and orbits
+    for planet in planets:
+        planet.orbit = []
+        if planet.name != "Sun":
+            planet.x = planet.a * (1 - planet.e)
+            planet.y = 0
+            planet.previous_x = planet.x - planet.x_vel * timestep
+            planet.previous_y = planet.y - planet.y_vel * timestep
+            planet.initialized = False
+
+    # Run the simulation
+    for _ in range(simulation_steps):
+        for planet in planets:
+            planet.update_position(planets)
+
+    # Collect the orbits
+    orbits = {planet.name: planet.orbit for planet in planets if planet.name != "Sun"}
+
+    # Restore original timestep
+    Planet.TIMESTEP = original_timestep
+
+    return orbits
+
+# Function to calculate RMS error against benchmark
+
+
+def calculate_rms_against_benchmark(benchmark, test_orbits, benchmark_timestep, test_timestep):
+    """
+    Calculate the RMS error for each planet against the benchmark orbits with interpolation.
+
+    Args:
+        benchmark (dict): Benchmark orbits.
+        test_orbits (dict): Test orbits to compare against the benchmark.
+        benchmark_timestep (float): Timestep of the benchmark simulation (seconds).
+        test_timestep (float): Timestep of the test simulation (seconds).
+
+    Returns:
+        dict: RMS error for each planet.
+    """
+    rms_errors = {}
+    for planet_name, benchmark_orbit in benchmark.items():
+        test_orbit = test_orbits[planet_name]
+
+        # Generate timestamps for benchmark and test orbits
+        benchmark_times = np.arange(0, len(benchmark_orbit) * benchmark_timestep, benchmark_timestep)
+        test_times = np.arange(0, len(test_orbit) * test_timestep, test_timestep)
+
+        # Interpolate test orbit to match benchmark timestamps
+        test_x = [pos[0] for pos in test_orbit]
+        test_y = [pos[1] for pos in test_orbit]
+        interp_x = interp1d(test_times, test_x, kind='linear', fill_value="extrapolate")
+        interp_y = interp1d(test_times, test_y, kind='linear', fill_value="extrapolate")
+
+        interpolated_test_orbit = [
+            (interp_x(t), interp_y(t)) for t in benchmark_times if t < test_times[-1]
+        ]
+
+        # Calculate RMS error
+        rms_error = 0
+        count = min(len(benchmark_orbit), len(interpolated_test_orbit))
+        for i in range(count):
+            benchmark_x, benchmark_y = benchmark_orbit[i]
+            test_x, test_y = interpolated_test_orbit[i]
+            distance_error = np.sqrt((benchmark_x - test_x) ** 2 + (benchmark_y - test_y) ** 2)
+            rms_error += distance_error ** 2
+        rms_errors[planet_name] = np.sqrt(rms_error / count) if count > 0 else 0
+    return rms_errors
+
+
+# Set up the benchmark simulation
+benchmark_timestep = 60  # 60 seconds
+simulation_duration = 365 * 24 * 3600  # 1 year in seconds
+benchmark_steps = simulation_duration // benchmark_timestep
+benchmark_orbits = run_simulation(planets, benchmark_timestep, benchmark_steps)
+
+# Test different timesteps
+
+# Test different timesteps
+timesteps = [3600, 3600 * 12, 3600 * 24, 3600 * 48, 3600 * 72]  # 1h, 12h, 24h, 48h, 72h
+rms_errors_by_planet = {}
+for timestep in timesteps:
+    test_steps = simulation_duration // timestep
+    test_orbits = run_simulation(planets, timestep, test_steps)
+    rms_errors_by_planet[timestep] = calculate_rms_against_benchmark(
+        benchmark_orbits, test_orbits, benchmark_timestep, timestep
+    )
+
+# Plot RMS errors for each planet
+plt.figure(figsize=(10, 6))
+for planet_name in [planet.name for planet in planets if planet.name != "Sun"]:
+    plt.plot(
+        [t / 3600 for t in timesteps],
+        [rms_errors_by_planet[t][planet_name] for t in timesteps],
+        marker="o",
+        label=planet_name
+    )
+    for t in timesteps:
+        err = rms_errors_by_planet[t][planet_name]
+        plt.text(t / 3600, err, f"({t / 3600:.0f}h, {err:.2e})", fontsize=9, ha='right')
+
+plt.title("RMS Error vs Timestep for Each Planet (Benchmark: 60s)")
+plt.xlabel("Timestep (hours)")
+plt.ylabel("RMS Error (meters)")
+plt.legend()
+plt.grid(True)
+plt.show()
